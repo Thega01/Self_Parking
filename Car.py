@@ -175,6 +175,12 @@ class Car:
             wheel_rect = Arena.RotatedRect(wheel_rect_data[0], wheel_rect_data[1], wheel_rect_data[2], WHEEL_COLOUR)
             wheel_rect.Draw(img)
 
+    def DrawRays(self, img):
+        for angle in self.camera_rays:
+            ray_start = (int(self.camera.x), int(self.camera.y))
+            ray_end = self.camera.FindRayIntercept(img, angle)
+            cv.line(img, Arena.offsetPt(ray_start), Arena.offsetPt(ray_end), (0, 0, 0), 1)
+
     def Drive(self, target_speed):
         inst_accel_limit = self.PerSecondToPerCycle(self.PerSecondToPerCycle(ACCELERATION_LIMIT))
         inst_speed = self.PerSecondToPerCycle(self.speed)
