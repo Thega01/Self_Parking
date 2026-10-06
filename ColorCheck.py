@@ -13,20 +13,19 @@ real_color2 = np.array([])
 lowerColor2 = np.array([])
 upperColor2 = np.array([])
 
-range = 7 #range for hue
-satRange = 50 #saturation range
-valRange = 50 #range for value
+range = 8 #range for hue
+satRange = 60 #saturation range
+valRange = 60 #range for value
 
-BLACK_THRESH = 45 # value cutoff for black
+BLACK_THRESH = 30 # value cutoff for black
 
-CAMERA_VIEW_ANGLE = 67.59 #total camera view angle
+CAMERA_VIEW_ANGLE = 65 #total camera view angle
 START_SCAN_ANGLE = 65 - 57 #ACW from 0 degrees
 BLOCK_SEPARATION = 5 #pixels between the two start colours
 BLOCK_WIDTH = 8 #width of start scan colour avg blocks
 SCAN_THICKNESS = 10  #vertical height of our scan band (both normal scans and start scan)
-SCAN_HEIGHT = 5 #how far to offset scan from center height
-SCAN_WIDTH = 0 #the width on either side of the scan angle
-SCAN_OFFSET = 69-144/2 #at 144 pixels high image #how many pixels to offset the ray scan by (+ve is to left on image)
+SCAN_HEIGHT = 10 #how far to offset scan from center height
+SCAN_WIDTH = 3 #the width on either side of the scan angle
 #begin function
 #scans the two colours stores in global  colours
 def ScanStart(image):
@@ -148,21 +147,37 @@ def ScanStart(image):
 #uses contours to check an hsv image for colour
 def CheckColour(hsv, upperCo, lowerCo):
     try:
-        #get the average h, s, v
-        mean_h = int(np.mean(hsv[:,:,0]))
-        mean_s = int(np.mean(hsv[:,:,1]))
-        mean_v = int(np.mean(hsv[:,:,2]))
         
-        avg_color = np.array([mean_h, mean_s, mean_v])
-        # print(avg_color)
-        # print(upperColor1)
-        # print(lowerColor1)
+        #make a mask with only our colours
+        #get mask size: if it is 10 pixels it is the colour
+        mask =  cv.inRange(hsv, lowerCo, upperCo) #get the part of trimmed HSV that is our colour
+        #slice = cv.bitwise_and(hsv, hsv, mask = mask)
+        _,mask = cv.threshold(mask, 127,255, cv.THRESH_BINARY) #black and white overlay image
+        myContours = np.array([])
+        myContours = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
         
-        if all(avg_color <= upperCo) and all(avg_color >= lowerCo):
-            #print("Color was within range")
-            return True
-        else:
-            return False
+        for contour in myContours:
+            if cv.contourArea(contour) >= 20:
+                #print("shape detected", cv.contourArea(contour))
+                return True
+            
+        return False
+    #Old code
+    #     #get the average h, s, v
+    #     mean_h = int(np.mean(hsv[:,:,0]))
+    #     mean_s = int(np.mean(hsv[:,:,1]))
+    #     mean_v = int(np.mean(hsv[:,:,2]))
+        
+    #     avg_color = np.array([mean_h, mean_s, mean_v])
+    #     # print(avg_color)
+    #     # print(upperColor1)
+    #     # print(lowerColor1)
+        
+    #     if all(avg_color <= upperCo) and all(avg_color >= lowerCo):
+    #         #print("Color was within range")
+    #         return True
+    #     else:
+    #         return False
     except Exception as e:
         #get the line
         ex_type, ex_object, traceback = sys.exc_info()
@@ -181,9 +196,8 @@ def CheckColours(image):
         #ret, image = video.read() #reads camera images as BGR (or RGB) images
         hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV) #use cvtColor with BGR2HSV to convert image to HSV
 
-        #get horizontal slice 
         #blur image
-        ksize = (3,3)
+        #ksize = (3,3)
         #hsv = cv.blur(hsv, ksize)   
         #cv.imshow('Blur', hsv)  
         
