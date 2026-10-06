@@ -17,15 +17,15 @@ range = 7 #range for hue
 satRange = 50 #saturation range
 valRange = 50 #range for value
 
-BLACK_THRESH = 30 # value cutoff for black
+BLACK_THRESH = 45 # value cutoff for black
 
-CAMERA_VIEW_ANGLE = 65 #total camera view angle
+CAMERA_VIEW_ANGLE = 67.59 #total camera view angle
 START_SCAN_ANGLE = 65 - 57 #ACW from 0 degrees
 BLOCK_SEPARATION = 5 #pixels between the two start colours
 BLOCK_WIDTH = 8 #width of start scan colour avg blocks
 SCAN_THICKNESS = 10  #vertical height of our scan band (both normal scans and start scan)
 SCAN_HEIGHT = 5 #how far to offset scan from center height
-SCAN_WIDTH = 2 #the width on either side of the scan angle
+SCAN_WIDTH = 0 #the width on either side of the scan angle
 SCAN_OFFSET = 69-144/2 #at 144 pixels high image #how many pixels to offset the ray scan by (+ve is to left on image)
 #begin function
 #scans the two colours stores in global  colours

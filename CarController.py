@@ -88,6 +88,7 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
         car.Move(real, arena)
         car.Draw(displayArena) 
         car.Draw(sensedArena)
+        #car.DrawRays(sensedArena)
         try:
             cv.drawMarker(sensedArena, Arena.offsetPt((int(car.target_x), int(car.target_y))), (120, 80, 200), cv.MARKER_DIAMOND, 10, 5 )
         except:
@@ -107,7 +108,7 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
 
 seed = 1
 real = True
-auto = True
+auto = False
 start_angle = (rng.random() * 2 - 1) * 0.05 if not real else 0
 while True:
     rng.seed(seed)

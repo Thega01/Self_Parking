@@ -408,14 +408,14 @@ class Car:
                 self.state = "DONE"
                 
         elif self.state == "PREPARING_TO_PARK":
-            self.FindTarget(arena)
+            #self.FindTarget(arena)
             self.MoveTo(self.target_x, self.target_y, 0)
             if self.DistTo(self.target_x, self.target_y) < WAYPOINT_TOLERANCE:
                 self.state = "PARKING"
                 self.speed = 1
 
         elif self.state == "PARKING":
-            self.FindTarget(arena)
+            #self.FindTarget(arena)
             self.MoveTo(self.target_x, self.target_y, np.pi* 3 / 2)
             if self.DistTo(self.target_x, self.target_y) < WAYPOINT_TOLERANCE and self.state == "PARKING": 
                 self.state = "PARKED"
