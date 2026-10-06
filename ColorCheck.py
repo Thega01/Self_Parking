@@ -19,7 +19,7 @@ valRange = 60 #range for value
 
 BLACK_THRESH = 30 # value cutoff for black
 
-CAMERA_VIEW_ANGLE = 65 #total camera view angle
+CAMERA_VIEW_ANGLE = 67.59 #total camera view angle
 START_SCAN_ANGLE = 65 - 57 #ACW from 0 degrees
 BLOCK_SEPARATION = 5 #pixels between the two start colours
 BLOCK_WIDTH = 8 #width of start scan colour avg blocks
@@ -157,7 +157,7 @@ def CheckColour(hsv, upperCo, lowerCo):
         myContours = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
         
         for contour in myContours:
-            if cv.contourArea(contour) >= 20:
+            if cv.contourArea(contour) >= 15:
                 #print("shape detected", cv.contourArea(contour))
                 return True
             
