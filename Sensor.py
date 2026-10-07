@@ -5,6 +5,7 @@ import Image
 import subprocess
 import sys
 import cv2 as cv
+import Car
 
 class Sensor:
     def __init__(self, x, y, dir, parent):
@@ -24,12 +25,13 @@ class Sensor:
 
     @property
     def dir(self):
-        return (self.dir_offset + self.parent.dir) % (2 * np.pi)
+        return Car.Normalise(self.dir_offset + self.parent.dir)
 
     
     def FindRayIntercept(self, img, directionOffset):
         startX = self.x + Arena.BORDER_WIDTH
         startY = self.y + Arena.BORDER_WIDTH
+        START_DIST = Car.WIDTH
         COARSE_DIST = 10 #px
         FINE_DIST = 1 #px
 
@@ -37,10 +39,10 @@ class Sensor:
         COARSE_Y = -COARSE_DIST * np.sin(self.dir + directionOffset)
 
         FINE_X = FINE_DIST * np.cos(self.dir + directionOffset)
-        FINE_Y = -FINE_DIST * np.sin(self.dir + directionOffset)
+        FINE_Y = - FINE_DIST * np.sin(self.dir + directionOffset)
 
-        scanX = startX + COARSE_X
-        scanY = startY + COARSE_Y
+        scanX = startX + START_DIST * np.cos(self.dir + directionOffset)
+        scanY = startY - START_DIST * np.sin(self.dir + directionOffset)
 
         while (0 <= int(scanY) < img.shape[0] and 0 <= int(scanX) < img.shape[1] 
                and np.all(img[int(scanY), int(scanX)] == Arena.BACKGROUND_COLOUR)):
