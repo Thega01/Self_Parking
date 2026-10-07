@@ -1,0 +1,11 @@
+Hi wonderful person
+ - The esp taking way longer to return a request is quite a big problem for the sim. 
+        Could we do this on my side instead of on the esp while waiting for a request?
+ - The new servo center is 64 deg. I have discovered that if I request max turning left (or right, who knows?) 
+        then the steering does not steer at all, but if I request slightly less, it steers.
+        Could we pleaase adjust the steering center, and also just turn the steering to max angle if an angle greater than max angle is requested?
+        like: 
+        if angle > max or angle < -max:
+        angle = max * sign of angle
+
+Thaaanks

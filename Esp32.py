@@ -24,7 +24,7 @@ class Esp32:
     def SetTurningAngle(self, rads):
         #servo takes angle from the end, and actuated angle doesn't line up with sent angle.
         degs = np.rad2deg(rads)
-        self.sending_angle = 68.3 + degs * 1.4 #66.3 is old num
+        self.sending_angle = 64 + degs * 1.4 #66.3 is old num
         pass
 
     def SendRequest(self, arena):

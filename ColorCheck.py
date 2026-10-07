@@ -26,6 +26,7 @@ BLOCK_WIDTH = 8 #width of start scan colour avg blocks
 SCAN_THICKNESS = 10  #vertical height of our scan band (both normal scans and start scan)
 SCAN_HEIGHT = 10 #how far to offset scan from center height
 SCAN_WIDTH = 3 #the width on either side of the scan angle
+SCAN_OFFSET = 69 - 144/2
 #begin function
 #scans the two colours stores in global  colours
 def ScanStart(image):
@@ -152,12 +153,12 @@ def CheckColour(hsv, upperCo, lowerCo):
         #get mask size: if it is 10 pixels it is the colour
         mask =  cv.inRange(hsv, lowerCo, upperCo) #get the part of trimmed HSV that is our colour
         #slice = cv.bitwise_and(hsv, hsv, mask = mask)
-        _,mask = cv.threshold(mask, 127,255, cv.THRESH_BINARY) #black and white overlay image
+        _,mask = cv.threshold(mask, 10 ,255, cv.THRESH_BINARY) #black and white overlay image
         myContours = np.array([])
         myContours = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
         
-        for contour in myContours:
-            if cv.contourArea(contour) >= 15:
+        for contour in myContours[0]:
+            if cv.contourArea(contour) >= 10:
                 #print("shape detected", cv.contourArea(contour))
                 return True
             
@@ -167,7 +168,6 @@ def CheckColour(hsv, upperCo, lowerCo):
     #     mean_h = int(np.mean(hsv[:,:,0]))
     #     mean_s = int(np.mean(hsv[:,:,1]))
     #     mean_v = int(np.mean(hsv[:,:,2]))
-        
     #     avg_color = np.array([mean_h, mean_s, mean_v])
     #     # print(avg_color)
     #     # print(upperColor1)
