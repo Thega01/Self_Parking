@@ -14,18 +14,17 @@ class Esp32:
         self.sending_speed = self.SetMotorSpeed(parent.speed)
         self.sending_angle = self.SetTurningAngle(parent.wheel_dir)
 
-    def Connect():
-        pass
-
     def SetMotorSpeed(self, mmPerSec):
-        CONVERSION_FACTOR = 255 / Car.MAX_SPEED
-        self.sending_speed = mmPerSec * CONVERSION_FACTOR # takes 0-255
+        MIN_MOVE = 176
+        MAX_MOVE = 255
+        CONVERSION_FACTOR = (MAX_MOVE - MIN_MOVE) / Car.MAX_SPEED
+        self.sending_speed = mmPerSec * CONVERSION_FACTOR + MIN_MOVE * np.sign(mmPerSec) if abs(mmPerSec) > 5 else 0# takes -255 to -255
 
     def SetTurningAngle(self, rads):
         #servo takes angle from the end, and actuated angle doesn't line up with sent angle.
         degs = np.rad2deg(rads)
         self.sending_angle = 64 + degs * 1.4 #66.3 is old num
-        pass
+        
 
     def SendRequest(self, arena):
         try:
@@ -33,7 +32,7 @@ class Esp32:
             request_headers = {
                 "turn":f"{self.sending_angle}","speed":f"{self.sending_speed}"
             }
-            #print(request_headers)
+            print(request_headers)
             #Send an http post request with headers containing information
             response = requests.post(IP + "/", headers=request_headers, timeout=3) #the / means the main get, top file directory
             #process the response
@@ -55,7 +54,7 @@ class Esp32:
                         self.sensors[sensor].last_sensed = distance * 0.25 + self.sensors[sensor].last_sensed * 0.75
                     else:
                         self.sensors[sensor].last_sensed = self.sensors[sensor].SenseSimDist(arena)
-                    #print(f"{sensor}: {self.sensors[sensor].last_sensed}")
+                    print(f"{sensor}: {self.sensors[sensor].last_sensed}")
             return
         except Exception as e:
             print("Error: ", e)

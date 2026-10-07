@@ -90,7 +90,7 @@ class Camera(Sensor):
 
     def SenseRealColour(self, ray_angle):
         colour = Image.SenseRealColour(ray_angle, self.last_img)
-        print(f"image hash: {hash(self.last_img.tobytes())}")
+        #print(f"image hash: {hash(self.last_img.tobytes())}")
         return colour
 
 class PID(Sensor):

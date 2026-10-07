@@ -20,7 +20,7 @@ valRange = 60 #range for value
 BLACK_THRESH = 30 # value cutoff for black
 
 CAMERA_VIEW_ANGLE = 67.59 #total camera view angle
-START_SCAN_ANGLE = 65 - 57 #ACW from 0 degrees
+START_SCAN_ANGLE = 67.59 - 57 #ACW from 0 degrees
 BLOCK_SEPARATION = 5 #pixels between the two start colours
 BLOCK_WIDTH = 8 #width of start scan colour avg blocks
 SCAN_THICKNESS = 10  #vertical height of our scan band (both normal scans and start scan)

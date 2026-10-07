@@ -1,3 +1,5 @@
+from turtle import mode
+
 from Sensor import PID, Camera
 import Esp32
 import numpy as np
@@ -12,7 +14,6 @@ LENGTH = 179 #mm
 CAR_SIZE = (LENGTH, WIDTH)
 WHEEL_SIZE = (23, 15)
 TURNING_RADIUS = 245 # mm
-REAL_TURNING_RADIUS = TURNING_RADIUS * 1.22
 COLOUR = (80,80,80)
 WHEEL_COLOUR = (0,0,0)
 
@@ -113,7 +114,7 @@ class Car:
             np.pi/8,
             np.pi/12,
             0,
-            -np.pi/12
+            -np.pi/12,
             -np.pi/8,
             -np.pi/6
         )
@@ -175,14 +176,14 @@ class Car:
             wheel_rect = Arena.RotatedRect(wheel_rect_data[0], wheel_rect_data[1], wheel_rect_data[2], WHEEL_COLOUR)
             wheel_rect.Draw(img)
 
-    def DrawRays(self, img):
+    def DrawRays(self, active_img ,img):
         for angle in self.camera_rays:
             ray_start = (int(self.camera.x), int(self.camera.y))
             ray_end = self.camera.FindRayIntercept(img, angle)
             cv.line(img, Arena.offsetPt(ray_start), Arena.offsetPt(ray_end), (0, 0, 0), 2, cv.LINE_AA, 0)
         for sensor in self.sensors.values():
             ray_start = (int(sensor.x), int(sensor.y))
-            ray_end = sensor.FindRayIntercept(img, 0)
+            ray_end = sensor.FindRayIntercept(active_img, 0)
             cv.line(img, Arena.offsetPt(ray_start), Arena.offsetPt(ray_end), (0, 0, 0), 2, cv.LINE_AA, 0)
 
     def Drive(self, target_speed):
@@ -244,7 +245,7 @@ class Car:
         SLOWER_WHEN_TURNING = 0.45
         SLOWER_WHEN_REVERSING = 0.93
         inst_speed = self.PerSecondToPerCycle(self.speed) if self.speed >= 0 else self.PerSecondToPerCycle(self.speed) * SLOWER_WHEN_REVERSING
-        inst_speed = inst_speed * np.cos(self.wheel_dir) # Slower when turning
+        inst_speed = inst_speed * np.cos(self.wheel_dir)**2 # Slower when turning
         self.x = self.x + inst_speed * np.cos(self.dir - self.wheel_dir/2)
         self.y = self.y - inst_speed * np.sin(self.dir - self.wheel_dir/2)
         self.dir = self.dir + inst_speed/self.wheelbase * np.tan(self.wheel_dir)
@@ -296,7 +297,7 @@ class Car:
         # --- TURNING GEOMETRY ---
 
 
-        inside_turning_line = abs(dist_to_target_line) < REAL_TURNING_RADIUS
+        inside_turning_line = abs(dist_to_target_line) < TURNING_RADIUS
 
         print(f"inside_turning_line: {inside_turning_line}, facing_line: {facing_line}, left_of_line: {left_of_line}")
         print(f"dist_to_target_line: {dist_to_target_line}, front_axle_dist_to_target_line: {front_axle_dist_to_target_line}, dtheta: {dtheta}, dtheta_to_45: {dtheta_to_45}")
@@ -321,12 +322,12 @@ class Car:
         if self.movement_state == "BACKING_UP":
             target_speed = -MAX_SPEED
 
-            if abs(dtheta) < LOCK_IN_ANGLE and abs(front_axle_dist_to_target_line) < TARGET_WIDTH:
+            if abs(dtheta) < LOCK_IN_ANGLE and abs(dist_to_target_line) < TARGET_WIDTH:
                 target_wheel_dir = -dist_to_target_line / TARGET_WIDTH * self.max_wheel_dir
             elif not inside_turning_line and facing_line:
                 target_wheel_dir = self.max_wheel_dir * left_of_line
             elif inside_turning_line and not facing_line:
-                target_wheel_dir = 0
+                target_wheel_dir = dtheta_to_45
             else:
                 target_wheel_dir = -dtheta_to_45
 
@@ -367,7 +368,8 @@ class Car:
                 self.colour_data[angle] = self.camera.SenseSimColour(generated_arena, angle)
             if self.colour_data[angle] is not None:
                 #print(f"colour {self.colour_data[angle]} at angle {angle}")
-                self.InterpretCameraData(arena, code_arena, angle, self.colour_data[angle], ignored_colours)
+                if not self.state == "PARKING":
+                    self.InterpretCameraData(arena, code_arena, angle, self.colour_data[angle], ignored_colours)
         
         if not auto:
              RunManually.MoveManually(self)
@@ -422,8 +424,8 @@ class Car:
         #print(f"location: {self.x}, {self.y}")
 
     def LocateOnTrack(self):
-        SIM_BIAS = 0.75
-        ANGLE_IGNORED = np.pi/8
+        SIM_BIAS = 0.5
+        ANGLE_IGNORED = np.pi/6
         inst_speed = self.PerSecondToPerCycle(self.speed)
         x_guess = self.x
         y_guess = self.y
@@ -457,7 +459,7 @@ class Car:
 
         dir_guesses = []
         #only make guessses on direction if we are not in line with x or y axis
-        quartile_dir = (self.dir + np.pi) % np.pi / 2 
+        quartile_dir = (self.dir + np.pi) % (np.pi / 2)
         if (quartile_dir > ANGLE_IGNORED and quartile_dir < np.pi/2 - ANGLE_IGNORED):
         
             DistBetweenSensors = lambda sensor1, sensor2: np.sqrt((sensor1.x - sensor2.x)**2 + (sensor1.y - sensor2.y)**2)
@@ -520,7 +522,7 @@ class Car:
         
         if in_bounds:
             dist_from_last = self.DistTo(x_guess, y_guess)
-            #print(f"Updating to x:{self.x}, y:{self.y}, dir:{dir_guess}")
+            print(f"Updating to x:{self.x}, y:{self.y}, dir:{dir_guess}")
             if dist_from_last < 50:
                 self.x = self.x * SIM_BIAS + x_guess * (1-SIM_BIAS)
 
@@ -596,13 +598,13 @@ class Car:
             if self.state == "PARKED":
                 self.visited_colours.append(target_park_rect.colour)
                 self.state = "REVERSING_OUT"
-                self.target_x = target_park.center[0] - REAL_TURNING_RADIUS
+                self.target_x = target_park.center[0] - TURNING_RADIUS
                 self.target_y = arena.start_pos[1]
             if self.state == "PARKING":
                 (self.target_x, self.target_y) = target_park.center
                 return
             if self.state == "PREPARING_TO_PARK":
-                self.target_x = target_park.center[0] - REAL_TURNING_RADIUS
+                self.target_x = target_park.center[0] - TURNING_RADIUS
                 self.target_y = arena.start_pos[1]
                 return
         else:
