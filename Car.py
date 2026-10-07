@@ -281,102 +281,59 @@ class Car:
 
         # Lateral distance from target trajectory line
         # (Cross product in y-down space yields signed perpendicular displacement)
-        dist_to_target_line = Cross(dx, -dy, np.cos(target_dir), -np.sin(target_dir))
+        dist_to_target_line = Dot(dx, dy, np.sin(target_dir), np.cos(target_dir))  #Cross(dx, -dy, np.cos(target_dir), -np.sin(target_dir))
+        front_axle_offset = (REAR_AXLE_POS + self.wheelbase - LENGTH / 2) * np.sin(self.dir)
+        front_axle_dist_to_target_line = dist_to_target_line + front_axle_offset
         left_of_line = 1.0 if dist_to_target_line > 0 else -1.0
+        front_left_of_line = 1.0 if front_axle_dist_to_target_line < 0 else -1.0
 
         # Angular differences
         dtheta = Normalise(target_dir - self.dir)
-        car_alignment = AngleAlignment(self.dir, target_dir)
+        dtheta_to_45 = (target_dir - self.dir - left_of_line * np.pi / 4 + np.pi / 4) % (np.pi / 2) - np.pi / 4
 
-        # --- AXLE & WHEEL POSITIONS ---
-        front_axle_abs = self.relToAbs(self.front_axle_center[0], self.front_axle_center[1])
-        dx_front = target_x - front_axle_abs[0]
-        dy_front = target_y - front_axle_abs[1]
-        front_wheel_dist_to_target_line = Cross(dx_front, -dy_front, np.cos(target_dir), -np.sin(target_dir))
-
-        back_axle_rel = (REAR_AXLE_POS, WIDTH / 2)
-        back_axle_abs = self.relToAbs(back_axle_rel[0], back_axle_rel[1])
-        dx_back = target_x - back_axle_abs[0]
-        dy_back = target_y - back_axle_abs[1]
-        back_wheel_dist_to_target_line = Cross(dx_back, -dy_back, np.cos(target_dir), -np.sin(target_dir))
-
-        back_wheel_alignment = AngleAlignment(Normalise(self.dir + self.wheel_dir), target_dir)
-        back_wheels_left_of_line = 1.0 if back_wheel_dist_to_target_line > 0 else -1.0
-        back_wheels_facing_line = 1.0 if (back_wheel_alignment * back_wheels_left_of_line <= 0) else -1.0
+        facing_line = left_of_line * np.sign(dtheta) > 0
 
         # --- TURNING GEOMETRY ---
-        intersection_x, intersection_y = FindIntersection(
-            self.x, self.y, self.dir, target_x, target_y, target_dir
-        )
 
-        turning_point_n = REAL_TURNING_RADIUS * (1 + np.cos(dtheta))
-        tan_dtheta = np.tan(dtheta)
-        turning_point_t = turning_point_n / tan_dtheta if abs(tan_dtheta) > 1e-5 else 0.0
 
-        # Default steering & speed targets (tracking line)
-        target_speed = min(MAX_SPEED, 2 * ACCELERATION_LIMIT * dist_to_target)
-        target_wheel_dir = -self.max_wheel_dir * np.clip(dist_to_target_line / TARGET_WIDTH, -1.0, 1.0)
+        inside_turning_line = abs(dist_to_target_line) < REAL_TURNING_RADIUS
+
+        print(f"inside_turning_line: {inside_turning_line}, facing_line: {facing_line}, left_of_line: {left_of_line}")
+        print(f"dist_to_target_line: {dist_to_target_line}, front_axle_dist_to_target_line: {front_axle_dist_to_target_line}, dtheta: {dtheta}, dtheta_to_45: {dtheta_to_45}")
 
         # --- STATE MACHINE ---
         if self.movement_state == "TRACKING_LINE":
-            if abs(front_wheel_dist_to_target_line) < TARGET_WIDTH / 2:
-                target_wheel_dir += dtheta / 2
+            target_speed = min(MAX_SPEED, 2 * ACCELERATION_LIMIT * dist_to_target)
+            # default: track line
+            if abs(dtheta) < LOCK_IN_ANGLE and abs(front_axle_dist_to_target_line) < TARGET_WIDTH:
+                target_wheel_dir = -front_axle_dist_to_target_line / TARGET_WIDTH * self.max_wheel_dir
+            elif inside_turning_line and not facing_line:
+                target_wheel_dir = -self.max_wheel_dir * left_of_line
+            elif inside_turning_line and facing_line:
+                target_wheel_dir = self.max_wheel_dir * left_of_line
+            else:
+                target_wheel_dir = dtheta_to_45
 
-            # State Transitions
             if self.HasOvershot(target_x, target_y, target_dir):
                 self.movement_state = "BACKING_UP"
-            elif intersection_x is not None:
-                turning_point_x = (
-                    intersection_x
-                    - turning_point_n * np.cos(target_dir)
-                    - turning_point_t * np.sin(target_dir)
-                )
-                turning_point_y = (
-                    intersection_y
-                    - turning_point_n * np.sin(target_dir)
-                    - turning_point_t * np.cos(target_dir)
-                )
 
-                if abs(dist_to_target_line) > TARGET_WIDTH and self.DistTo(turning_point_x, turning_point_y) < TARGET_WIDTH:
-                    self.movement_state = "TURNING"
 
-                elif abs(dist_to_target_line) > TARGET_WIDTH or abs(dtheta) > LOCK_IN_ANGLE * 3:
-                    self.movement_state = "BACKING_UP"
-
-        elif self.movement_state == "TURNING":
-            target_speed = MAX_SPEED
-            target_wheel_dir = -self.max_wheel_dir * left_of_line
-
-            # Transitions: Exit TURNING only when aligned on target line or when overshot
-            if self.HasOvershot(target_x, target_y, target_dir):
-                self.movement_state = "BACKING_UP"
-            elif abs(front_wheel_dist_to_target_line) < TARGET_WIDTH / 2 and abs(dtheta) < LOCK_IN_ANGLE:
-                self.movement_state = "TRACKING_LINE"
-
-        elif self.movement_state == "BACKING_UP":
+        if self.movement_state == "BACKING_UP":
             target_speed = -MAX_SPEED
 
-            # Steering while reversing
-            if back_wheels_facing_line < 0:
-                target_wheel_dir = dtheta / 2
+            if abs(dtheta) < LOCK_IN_ANGLE and abs(front_axle_dist_to_target_line) < TARGET_WIDTH:
+                target_wheel_dir = -dist_to_target_line / TARGET_WIDTH * self.max_wheel_dir
+            elif not inside_turning_line and facing_line:
+                target_wheel_dir = self.max_wheel_dir * left_of_line
+            elif inside_turning_line and not facing_line:
+                target_wheel_dir = 0
             else:
-                target_wheel_dir = -dtheta / 2
-
-            if abs(dist_to_target_line) < TARGET_WIDTH:
-                scale = max(1.0, abs(back_wheel_dist_to_target_line / TARGET_WIDTH))
-                target_wheel_dir = -scale * dtheta
-
-            if abs(dist_to_target_line) > 180:
-                target_wheel_dir = 0.0
+                target_wheel_dir = -dtheta_to_45
 
             # Transitions: Require backing up far enough to reset path approach
             has_overshot_target = self.HasOvershot(target_x, target_y, target_dir)
             if not has_overshot_target and dist_to_target > BACKUP_DIST:
-                if abs(dist_to_target_line) <= TARGET_WIDTH and abs(dtheta) < LOCK_IN_ANGLE:
-                    self.movement_state = "TRACKING_LINE"
-                else:
-                    self.movement_state = "TURNING"
-
+                self.movement_state = "TRACKING_LINE"
         # Clamp steering input to max physical limits
         target_wheel_dir = np.clip(target_wheel_dir, -self.max_wheel_dir, self.max_wheel_dir)
 
@@ -398,7 +355,7 @@ class Car:
             else:
                 self.distance_data[sensor] = sensor.SenseSimDist(generated_arena)
             self.hit_data[sensor] = sensor.FindHitData(code_arena)
-            print(f"{sensor} hit at {sensor.FindHitData(code_arena)}")
+            #print(f"{sensor} hit at {sensor.FindHitData(code_arena)}")
 
         if real:
             self.camera.UpdateImage()
@@ -409,7 +366,7 @@ class Car:
             else:
                 self.colour_data[angle] = self.camera.SenseSimColour(generated_arena, angle)
             if self.colour_data[angle] is not None:
-                print(f"colour {self.colour_data[angle]} at angle {angle}")
+                #print(f"colour {self.colour_data[angle]} at angle {angle}")
                 self.InterpretCameraData(arena, code_arena, angle, self.colour_data[angle], ignored_colours)
         
         if not auto:
