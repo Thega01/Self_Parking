@@ -324,12 +324,13 @@ class Car:
         LOCK_IN_ANGLE = np.pi / 60  # ~3 degrees
 
         # --- RELATIVE GEOMETRY ---
+        target_dir = Normalise(target_dir)
         d_x = target_x - self.x
         d_y = target_y - self.y
         dist_to_target = DistAB(self.x, self.y, target_x, target_y)
 
         # perpendicular Distance to target line (+ means target line is to the RIGHT of car heading)
-        d_perp = Dot(d_x, d_y, np.sin(target_dir), -np.cos(target_dir))
+        d_perp = Dot(d_x, d_y, -np.sin(target_dir), -np.cos(target_dir))
         # parralel Distance along target line to point
         d_parr = np.sqrt(dist_to_target**2 - d_perp**2)
         
@@ -341,13 +342,13 @@ class Car:
 
         # Check if car's nose points toward the target line
         side = 1.0 if d_perp >= 0 else -1.0
-        perp_angle = Normalise(target_dir - side * (np.pi / 2))
+        perp_angle = Normalise(target_dir + side * (np.pi / 2))
         dtheta_perp = Normalise(self.dir - perp_angle)
-        is_facing_line = dtheta_parr * side >= 0
+        is_facing_line = dtheta_parr * side <= 0
         print(f"self_dir: {self.dir:.3f}, target_dir: {target_dir:.3f}")
         print(f"sign_dist: {side}, perp_angle: {perp_angle}, dtheta_perp: {dtheta_perp:.3f}, dtheta_parr: {dtheta_parr:.3f} facing line: {is_facing_line}")
 
-        # --- STATE MACHINE TRANSITIONS ---
+        
         is_overshot = self.HasOvershot(target_x, target_y, target_dir)
         is_behind = self.HasOvershot(target_x, target_y, self.dir)
         dist_to_turning_zone = abs(d_perp) - turning_dist_forwards if is_facing_line else abs(d_perp) - turning_dist_backwards #> 0 if outisde, <0 if inside
@@ -356,7 +357,8 @@ class Car:
         near_turning_zone = abs(dist_to_turning_zone) <= 20
 
         print(f"d_perp: {d_perp:.0f}, is_facing_line: {is_facing_line}, inside_turning_area: {inside_turning_area}, dtheta_perp: {dtheta_perp:.2f}, dtheta_parr: {dtheta_parr:.2f}")
-
+        
+        # --- STATE TRANSITIONS ---
         if is_overshot:
             if not inside_turning_area:
                 self.movement_state = "DRIVING_TOWARDS"
@@ -379,13 +381,11 @@ class Car:
             else: self.movement_state = "DRIVING_TOWARDS"
 
         elif self.movement_state == "TURNING_BACKWARDS":
-            if not is_facing_line:
-                if near_turning_zone:
-                    if is_facing_line and abs(d_perp) <= TARGET_WIDTH / 2:
-                        self.movement_state = "TRACKING_LINE"
-                else:
-                    if inside_turning_area: self.movement_state = "TRACKING_LINE"
-                    else: self.movement_state = "DRIVING_TOWARDS" 
+            if is_facing_line and abs(d_perp) <= TARGET_WIDTH / 2:
+                self.movement_state = "TRACKING_LINE"
+            elif not is_facing_line:
+                if inside_turning_area: self.movement_state = "TRACKING_LINE"
+                else: self.movement_state = "DRIVING_TOWARDS" 
             else: self.movement_state = "DRIVING_TOWARDS" 
 
         elif self.movement_state == "TRACKING_LINE":
@@ -420,7 +420,7 @@ class Car:
 
         elif self.movement_state == "TURNING_FORWARDS":
             target_speed = MAX_SPEED
-            target_wheel_dir = np.sign(d_perp) * self.max_wheel_dir
+            target_wheel_dir = -np.sign(d_perp) * self.max_wheel_dir
 
         elif self.movement_state == "TURNING_BACKWARDS":
             target_speed = -MAX_SPEED
