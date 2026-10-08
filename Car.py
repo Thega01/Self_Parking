@@ -14,6 +14,7 @@ LENGTH = 179 #mm
 CAR_SIZE = (LENGTH, WIDTH)
 WHEEL_SIZE = (23, 15)
 TURNING_RADIUS = 245 # mm
+REAL_TURNING_RADIUS = TURNING_RADIUS * 1.22
 COLOUR = (80,80,80)
 WHEEL_COLOUR = (0,0,0)
 
@@ -47,6 +48,7 @@ def DistAB(x1, y1, x2, y2):
     return np.sqrt(dx**2 + dy**2)
 
 def Normalise(angle):
+    """Normalize angle to [-pi, pi]."""
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
 def AngleAlignment(theta1, theta2): # 1 if aligned, 0 if perpendicular, -1 if facing reverse
@@ -256,90 +258,187 @@ class Car:
             self.esp.SendRequest(arena)
 
     def DistTo(self, x, y):
+        """Returns the distance from the center of the car to the point"""
         return DistAB(self.x, self.y, x, y)
 
 
-
     def HasOvershot(self, target_x, target_y, target_dir):
+        """Checks if the car has passed the target point using a dot product check."""
         dx = target_x - self.x
         dy = target_y - self.y
         dist_to_target = DistAB(self.x, self.y, target_x, target_y)
-        #print(f"Dot: {Dot(dx /  dist_to_target, dy / dist_to_target, np.cos(target_dir), -np.sin(target_dir))}")
-        return False if Dot(dx /  dist_to_target, dy / dist_to_target, np.cos(target_dir), -np.sin(target_dir)) > 0 else True
         
+        if dist_to_target == 0:
+            return False
+            
+        # Dot product: if the vector to the target opposes the target forward vector, it has overshot
+        return Dot(dx / dist_to_target, dy / dist_to_target, np.cos(target_dir), -np.sin(target_dir)) < 0
+
+    def TrackLine(self, dist_to_target, dtheta_parr, d_perp, TARGET_WIDTH):
+
+        heading_gain = 4
+        crosstrack_gain = self.max_wheel_dir / (TARGET_WIDTH)
+
+        # Fade out cross-track pull near the target to force perfect parallel alignment
+        near_target_fade = min(1.0, dist_to_target / (TARGET_WIDTH / 6))
+        if self.movement_state == "TRACKING_LINE":
+            return (heading_gain * dtheta_parr) + (d_perp * crosstrack_gain * near_target_fade)
+
+        elif self.movement_state == "BACKING_UP":
+            return -(heading_gain * dtheta_parr) + (d_perp * crosstrack_gain * near_target_fade)
+
 
     def MoveTo(self, target_x, target_y, target_dir):
+        """Sets Car movement state, target speed and target turning angle for Rear-Wheel Steering (RWS)"""
+
+         # ### ---PLAN--- ###
+        # given current location, direction, and target location and direction, drive forwards or backwards until
+        # the car can steer to land directly on the target line, then drive forwards to the target. If the car overshoots the target, back up and try again.
+        #
+        # practically:
+        # we need to find how far (normal to the target line) the car needs to start turning.
+        # if we're outside of that, starighten the car to 90 degrees to the target line and drive
+        # fowards or backwards until we are within a distance of the turning point.
+        # if the target is to the right of the car, and we're driving forwards, we need to turn right.
+        # if the target is to the left of the car, and we're driving forwards, we need to turn left.
+        # if the target is to the right of the car, and we're driving backwards, we need to turn left so that the front of the car is facing the target when we finish the turn.
+        # if the target is to the left of the car, and we're driving backwards, we need to turn right.
+        # we need to stop turning when the car's direction has aligned or overshot the target direction, and then track the line to the target.
+        # If we overshoot the target, or the turning point isn't close to the car anymore, we need to back up and try again.
+        #
+        # things we need to know:
+        # the distance from the car to the target line (perpendicular)
+        # the distance from the car to the target point (in line with target direction)
+        # the angle from the car to the target direction
+        # the angle from the car to perpendicular to the target line (either way)
+        # how far from the target line we need to start turning (turning radius) * (1 - cos(angle from car to target direction))
+        # if the car is facing the target line
+        # we could write a function to set turning angle (but not speed) given a target point and direction for line following (forwards or reverse)
+        # we should write a function to find out if we've overshot the target or not
+        # we should make a state machine so we know whether we're DRIVING_TOWARDS a line, TURNING_FORWARDS to a line, TURNING_BACKWARDS to a line, TRACKING_LINE a line, or BACKING_UP along a line 
+
         # --- CONSTANTS & THRESHOLDS ---
-        CLOSE_DIST = 100  # mm
-        TARGET_WIDTH = 20  # mm
-        BACKUP_DIST = LENGTH * 1.5  # mm (clearance needed before re-engaging forward turn)
-        LOCK_IN_ANGLE = np.pi / 15  # ~12 degrees
+        CLOSE_DIST = 20        # mm
+        TARGET_WIDTH = 20      # mm 
+        BACKUP_DIST = REAL_TURNING_RADIUS
+        LOCK_IN_ANGLE = np.pi / 60  # ~3 degrees
 
         # --- RELATIVE GEOMETRY ---
-        dx = target_x - self.x
-        dy = target_y - self.y
+        d_x = target_x - self.x
+        d_y = target_y - self.y
         dist_to_target = DistAB(self.x, self.y, target_x, target_y)
 
-        # Lateral distance from target trajectory line
-        # (Cross product in y-down space yields signed perpendicular displacement)
-        dist_to_target_line = Dot(dx, dy, np.sin(target_dir), np.cos(target_dir))  #Cross(dx, -dy, np.cos(target_dir), -np.sin(target_dir))
-        front_axle_offset = (REAR_AXLE_POS + self.wheelbase - LENGTH / 2) * np.sin(self.dir)
-        front_axle_dist_to_target_line = dist_to_target_line + front_axle_offset
-        left_of_line = 1.0 if dist_to_target_line > 0 else -1.0
-        front_left_of_line = 1.0 if front_axle_dist_to_target_line < 0 else -1.0
+        # perpendicular Distance to target line (+ means target line is to the RIGHT of car heading)
+        d_perp = Dot(d_x, d_y, np.sin(target_dir), -np.cos(target_dir))
+        # parralel Distance along target line to point
+        d_parr = np.sqrt(dist_to_target**2 - d_perp**2)
+        
+        # Heading error CCW [-pi, pi]
+        dtheta_parr = Normalise(target_dir - self.dir)
+        
+        turning_dist_forwards = REAL_TURNING_RADIUS * (1 - np.cos(dtheta_parr))
+        turning_dist_backwards = TURNING_RADIUS * (1 - np.cos(dtheta_parr))
 
-        # Angular differences
-        dtheta = Normalise(target_dir - self.dir)
-        dtheta_to_45 = (target_dir - self.dir - left_of_line * np.pi / 4 + np.pi / 4) % (np.pi / 2) - np.pi / 4
+        # Check if car's nose points toward the target line
+        side = 1.0 if d_perp >= 0 else -1.0
+        perp_angle = Normalise(target_dir - side * (np.pi / 2))
+        dtheta_perp = Normalise(self.dir - perp_angle)
+        is_facing_line = dtheta_parr * side >= 0
+        print(f"self_dir: {self.dir:.3f}, target_dir: {target_dir:.3f}")
+        print(f"sign_dist: {side}, perp_angle: {perp_angle}, dtheta_perp: {dtheta_perp:.3f}, dtheta_parr: {dtheta_parr:.3f} facing line: {is_facing_line}")
 
-        facing_line = left_of_line * np.sign(dtheta) > 0
+        # --- STATE MACHINE TRANSITIONS ---
+        is_overshot = self.HasOvershot(target_x, target_y, target_dir)
+        is_behind = self.HasOvershot(target_x, target_y, self.dir)
+        dist_to_turning_zone = abs(d_perp) - turning_dist_forwards if is_facing_line else abs(d_perp) - turning_dist_backwards #> 0 if outisde, <0 if inside
+        inside_turning_area = dist_to_turning_zone <= 10
+        at_turning_zone = abs(dist_to_turning_zone) <= 10 
+        near_turning_zone = abs(dist_to_turning_zone) <= 20
 
-        # --- TURNING GEOMETRY ---
+        print(f"d_perp: {d_perp:.0f}, is_facing_line: {is_facing_line}, inside_turning_area: {inside_turning_area}, dtheta_perp: {dtheta_perp:.2f}, dtheta_parr: {dtheta_parr:.2f}")
 
+        if is_overshot:
+            if not inside_turning_area:
+                self.movement_state = "DRIVING_TOWARDS"
+            else: self.movement_state = "BACKING_UP"
+        elif is_behind and self.movement_state != "TURNING_BACKWARDS" and not inside_turning_area:
+            self.movement_state = "DRIVING_TOWARDS"
+        elif self.movement_state == "BACKING_UP":
+            if dist_to_target > BACKUP_DIST:
+                self.movement_state = "DRIVING_TOWARDS"
+        
 
-        inside_turning_line = abs(dist_to_target_line) < TURNING_RADIUS
+        elif self.movement_state == "TURNING_FORWARDS":
+            if is_facing_line:
+                if near_turning_zone:
+                    if abs(d_perp) <= TARGET_WIDTH / 2:
+                        self.movement_state = "TRACKING_LINE"
+                else:
+                    if inside_turning_area: self.movement_state = "TRACKING_LINE"
+                    else: self.movement_state = "DRIVING_TOWARDS"
+            else: self.movement_state = "DRIVING_TOWARDS"
 
-        print(f"inside_turning_line: {inside_turning_line}, facing_line: {facing_line}, left_of_line: {left_of_line}")
-        print(f"dist_to_target_line: {dist_to_target_line}, front_axle_dist_to_target_line: {front_axle_dist_to_target_line}, dtheta: {dtheta}, dtheta_to_45: {dtheta_to_45}")
+        elif self.movement_state == "TURNING_BACKWARDS":
+            if not is_facing_line:
+                if near_turning_zone:
+                    if is_facing_line and abs(d_perp) <= TARGET_WIDTH / 2:
+                        self.movement_state = "TRACKING_LINE"
+                else:
+                    if inside_turning_area: self.movement_state = "TRACKING_LINE"
+                    else: self.movement_state = "DRIVING_TOWARDS" 
+            else: self.movement_state = "DRIVING_TOWARDS" 
 
-        # --- STATE MACHINE ---
-        if self.movement_state == "TRACKING_LINE":
-            target_speed = min(MAX_SPEED, 2 * ACCELERATION_LIMIT * dist_to_target)
-            # default: track line
-            if abs(dtheta) < LOCK_IN_ANGLE and abs(front_axle_dist_to_target_line) < TARGET_WIDTH:
-                target_wheel_dir = -front_axle_dist_to_target_line / TARGET_WIDTH * self.max_wheel_dir
-            elif inside_turning_line and not facing_line:
-                target_wheel_dir = -self.max_wheel_dir * left_of_line
-            elif inside_turning_line and facing_line:
-                target_wheel_dir = self.max_wheel_dir * left_of_line
-            else:
-                target_wheel_dir = dtheta_to_45
+        elif self.movement_state == "TRACKING_LINE":
+            if not (inside_turning_area or near_turning_zone):
+                self.movement_state = "DRIVING_TOWARDS"
+            elif not abs(d_perp) <= TARGET_WIDTH / 2:
+                self.movement_state = "TURNING_FORWARDS" if is_facing_line else "TURNING_BACKWARDS"
 
-            if self.HasOvershot(target_x, target_y, target_dir):
-                self.movement_state = "BACKING_UP"
-
-
-        if self.movement_state == "BACKING_UP":
-            target_speed = -MAX_SPEED
-
-            if abs(dtheta) < LOCK_IN_ANGLE and abs(dist_to_target_line) < TARGET_WIDTH:
-                target_wheel_dir = -dist_to_target_line / TARGET_WIDTH * self.max_wheel_dir
-            elif not inside_turning_line and facing_line:
-                target_wheel_dir = self.max_wheel_dir * left_of_line
-            elif inside_turning_line and not facing_line:
-                target_wheel_dir = dtheta_to_45
-            else:
-                target_wheel_dir = -dtheta_to_45
-
-            # Transitions: Require backing up far enough to reset path approach
-            has_overshot_target = self.HasOvershot(target_x, target_y, target_dir)
-            if not has_overshot_target and dist_to_target > BACKUP_DIST:
+        elif self.movement_state == "DRIVING_TOWARDS":
+            if at_turning_zone:
+                if is_facing_line:
+                    self.movement_state = "TURNING_FORWARDS"
+                else:
+                    self.movement_state = "TURNING_BACKWARDS"
+            elif (inside_turning_area or near_turning_zone) and abs(dtheta_parr) < LOCK_IN_ANGLE:
                 self.movement_state = "TRACKING_LINE"
-        # Clamp steering input to max physical limits
+
+        # --- STATE EXECUTIONS ---
+        target_speed = 0.0
+        target_wheel_dir = 0.0
+
+        if self.movement_state == "DRIVING_TOWARDS":
+            if is_facing_line:
+                target_speed = MAX_SPEED
+                target_wheel_dir = -dtheta_perp
+            else:
+                target_speed = - MAX_SPEED
+                target_wheel_dir = dtheta_perp
+            if inside_turning_area:
+                target_speed = -target_speed
+                target_wheel_dir = -target_wheel_dir
+
+        elif self.movement_state == "TURNING_FORWARDS":
+            target_speed = MAX_SPEED
+            target_wheel_dir = np.sign(d_perp) * self.max_wheel_dir
+
+        elif self.movement_state == "TURNING_BACKWARDS":
+            target_speed = -MAX_SPEED
+            target_wheel_dir = np.sign(d_perp) * self.max_wheel_dir
+
+        elif self.movement_state == "TRACKING_LINE":
+            target_speed = min(MAX_SPEED, 2 * ACCELERATION_LIMIT * dist_to_target)
+            target_wheel_dir = self.TrackLine(dist_to_target, dtheta_parr, d_perp, TARGET_WIDTH)
+            
+
+        elif self.movement_state == "BACKING_UP":
+            target_speed = -MAX_SPEED
+            target_wheel_dir = self.TrackLine(dist_to_target, dtheta_parr, d_perp, TARGET_WIDTH)
+
+        # Clamp steering input to max physical limit
         target_wheel_dir = np.clip(target_wheel_dir, -self.max_wheel_dir, self.max_wheel_dir)
 
-        # move
-        print(f"Movement State: {self.movement_state}, Target Speed: {target_speed:.2f}, Target Wheel Dir: {target_wheel_dir:.2f}")
+        # Move
         self.Turn(target_wheel_dir)
         self.Drive(target_speed)
 
@@ -349,7 +448,7 @@ class Car:
 
 
     def DoSensorsAndStates(self, generated_arena, code_arena, arena, ignored_colours, real, auto):
-        WAYPOINT_TOLERANCE = 20 # mm
+        WAYPOINT_TOLERANCE = 10 # mm
         for sensor in self.esp.sensors.values():
             if real:
                 self.distance_data[sensor] = sensor.SenseRealDist()
@@ -598,13 +697,13 @@ class Car:
             if self.state == "PARKED":
                 self.visited_colours.append(target_park_rect.colour)
                 self.state = "REVERSING_OUT"
-                self.target_x = target_park.center[0] - TURNING_RADIUS
+                self.target_x = target_park.center[0] + 50# - REAL_TURNING_RADIUS
                 self.target_y = arena.start_pos[1]
             if self.state == "PARKING":
                 (self.target_x, self.target_y) = target_park.center
                 return
             if self.state == "PREPARING_TO_PARK":
-                self.target_x = target_park.center[0] - TURNING_RADIUS
+                self.target_x = target_park.center[0] - REAL_TURNING_RADIUS
                 self.target_y = arena.start_pos[1]
                 return
         else:
