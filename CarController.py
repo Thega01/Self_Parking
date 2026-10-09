@@ -5,6 +5,7 @@ import numpy as np
 import cv2 as cv
 from pydualsense import pydualsense
 import RunManually
+import CameraConnection
 
 COLOURS = { #BGR
     "RED": (0, 0, 255),
@@ -72,12 +73,14 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
     car.esp.SetMotorSpeed(0)
     car.esp.SetTurningAngle(0)
     if real:
-        for i in range(3, 0, -1):
+        for i in range(10, 0, -1):
             print (i)
-            car.esp.SendRequest(arena)
+            CameraConnection.ConfigureCamera()
+            car.camera.CameraOn(is_on = True)
             car.camera.UpdateImage()
+            car.esp.SendRequest(arena)
             car.CalibrateSensors(arena)
-            cv.waitKey(1000)
+            cv.waitKey(400)
 
 
     car.UpdateClockDiff()
@@ -119,8 +122,6 @@ while True:
     arena = Arena.Arena(COLOURS)
     (x, y) = arena.start_pos
     car = Car.Car(x, y, start_angle)        
-    if real:
-        car.camera.CameraOn(is_on = True)
     if not auto:
         RunManually.StartController()
     #RunManually(arena, generated_arena, car, real)
