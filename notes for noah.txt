@@ -13,3 +13,5 @@ Thaaanks
 
 #sim speed slower than reality
 #reversing speed needs tweaks in packet sender
+
+# sensors are just returning sim data

@@ -482,7 +482,7 @@ class Car:
         elif self.state == "SEARCHING_FOR_TARGET":
             #print(self.DistTo(self.target_x,self.target_y))
             if real:
-                self.LeftBangBangShift()
+                self.LeftBangBangShift(arena)
             self.FindTarget(arena)
             self.MoveTo(self.target_x, self.target_y, 0)
             if self.DistTo(self.target_x, self.target_y) < WAYPOINT_TOLERANCE and self.state == "SEARCHING_FOR_TARGET":
@@ -526,17 +526,18 @@ class Car:
         #print(f"Target: {self.target_x}, {self.target_y}")
         #print(f"Dist to: {self.DistTo(self.target_x, self.target_y)}")
         #print(f"location: {self.x}, {self.y}")
-    def LeftBangBangShift(self):
-        BANG_GAIN = 0.2
+    def LeftBangBangShift(self, arena):
+        BANG_GAIN = 1
         TOLERANCE = 6
         #get real and sim distances
         real_d_left = (self.esp.sensors["LEFT"]).SenseRealDist()
-        sim_d_left =  (self.sensors["LEFT"]).SenseSimDist()
-        
+        sim_d_left =  (self.sensors["LEFT"]).SenseSimDist(arena)
+        print("here1")
         #filter out bad readings: 
-        if abs(real_d_left) + TOLERANCE > abs(sim_d_left) or abs(real_d_left) - TOLERANCE < abs(sim_d_left):
+        print(f"real: {real_d_left} sim: {sim_d_left}")
+        if abs(real_d_left - sim_d_left) < TOLERANCE:
             return
-        
+        print("here2")
         #if d_left is more than we thought shift car sim right
         self.y = self.y + (real_d_left - sim_d_left) * BANG_GAIN
         

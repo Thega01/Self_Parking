@@ -23,7 +23,7 @@ class Esp32:
     def SetTurningAngle(self, rads):
         #servo takes angle from the end, and actuated angle doesn't line up with sent angle.
         degs = np.rad2deg(rads)
-        self.sending_angle = 64 + degs * 1.4 #66.3 is old num
+        self.sending_angle = 64.5 + degs * 1.4 #66.3 is old num
         
 
     def SendRequest(self, arena):
@@ -50,7 +50,7 @@ class Esp32:
             if len(distances) > 0:
                 for sensor in distances.keys():
                     distance = float(distances[sensor])
-                    if distance > 40:
+                    if distance > 10:
                         self.sensors[sensor].last_sensed = distance * 0.25 + self.sensors[sensor].last_sensed * 0.75
                     else:
                         self.sensors[sensor].last_sensed = self.sensors[sensor].SenseSimDist(arena)

@@ -112,7 +112,7 @@ auto = True
 start_angle = (rng.random() * 2 - 1) * 0.05 if not real else 0
 while True:
     rng.seed(seed)
-    generated_arena = Arena.Arena(COLOURS, "SIM")
+    generated_arena = Arena.Arena(COLOURS, "SIM") if real else Arena.Arena(COLOURS)
     code_arena = Arena.Arena(COLOURS, "CODE")
     arena = Arena.Arena(COLOURS)
     (x, y) = arena.start_pos
