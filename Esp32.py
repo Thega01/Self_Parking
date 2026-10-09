@@ -32,7 +32,7 @@ class Esp32:
             request_headers = {
                 "turn":f"{self.sending_angle}","speed":f"{self.sending_speed}"
             }
-            print(request_headers)
+            #print(request_headers)
             #Send an http post request with headers containing information
             response = requests.post(IP + "/", headers=request_headers, timeout=3) #the / means the main get, top file directory
             #process the response
@@ -40,18 +40,19 @@ class Esp32:
             content = response.content.decode(encoding = "utf-8")
             
             response.close()
-            #split types of distance sensors (eg. BACK1, LEFT...)
+            #split types of distance sensors (eg. BACK1, LEFT...)qq
             type_array = content_type.split(" ")
             #split content by spaces (floats but stored as a string)
             content_array = content.split(" ")
             #make a dictionary of content and types
             distances = dict(zip(type_array, content_array))
-            #print(distances)
+            print(distances)
             if len(distances) > 0:
-                for sensor in distances.keys():
-                    distance = float(distances[sensor])
+                for sensor, distance in distances.items():
+                    distance = int(distance)
                     if distance > 10:
                         self.sensors[sensor].last_sensed = distance * 0.25 + self.sensors[sensor].last_sensed * 0.75
+                        print(f"{sensor} sensor hit: {distance}")
                     else:
                         self.sensors[sensor].last_sensed = self.sensors[sensor].SenseSimDist(arena)
                     print(f"{sensor}: {self.sensors[sensor].last_sensed}")

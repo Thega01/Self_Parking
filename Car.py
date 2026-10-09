@@ -357,8 +357,8 @@ class Car:
         near_turning_zone = abs(dist_to_turning_zone) <= CLOSE_UNLOCK
         in_target_zone = abs(d_perp) <= TARGET_WIDTH / 2
 
-        print(f"d_perp: {d_perp:.0f}, is_facing_line: {is_facing_line}, inside_turning_area: {inside_turning_area}, dtheta_perp: {dtheta_perp:.2f}, dtheta_parr: {dtheta_parr:.2f}")
-        print(f"dist_to_turning_zone: {dist_to_turning_zone:.0f}, turning_dist_forwards: {turning_dist_forwards:.0f}, turning_dist_backwards: {turning_dist_backwards:.0f}")
+        #print(f"d_perp: {d_perp:.0f}, is_facing_line: {is_facing_line}, inside_turning_area: {inside_turning_area}, dtheta_perp: {dtheta_perp:.2f}, dtheta_parr: {dtheta_parr:.2f}")
+        #print(f"dist_to_turning_zone: {dist_to_turning_zone:.0f}, turning_dist_forwards: {turning_dist_forwards:.0f}, turning_dist_backwards: {turning_dist_backwards:.0f}")
         
         # --- STATE TRANSITIONS ---
         if is_overshot:
