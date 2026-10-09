@@ -107,7 +107,7 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
 
 
 seed = 1
-real = False
+real = True
 auto = True
 start_angle = (rng.random() * 2 - 1) * 0.05 if not real else 0
 while True:
@@ -125,6 +125,10 @@ while True:
     
    
     RunCar(arena, generated_arena, code_arena, car, real, auto)
+    car.speed = 0
+    car.Move(real, arena)
+    cv.waitKey(0)
+    car.esp.SendRequest()
     if cv.waitKey(0) != ord('r'):
         break
     else:

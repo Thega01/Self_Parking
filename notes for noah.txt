@@ -9,3 +9,7 @@ Hi wonderful person
         angle = max * sign of angle
 
 Thaaanks
+
+
+#sim speed slower than reality
+#reversing speed needs tweaks in packet sender

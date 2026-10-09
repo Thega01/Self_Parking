@@ -23,7 +23,7 @@ REAR_AXLE_POS = 20 #mm
 WHEEL_INSET = 20 #mm
 STEERING_AXLE_OFFSET = 8 #mm
 STEERING_SPEED = 2 #rad/sec
-MAX_SPEED = 33.3#26.0 #mm/sec
+MAX_SPEED = 33.3 #mm/sec #33.3 is real (measured)
 ACCELERATION_LIMIT = 600 #mm/sec^2
 DRAG = 0.96
 BACK_SENSOR_OFFSET = 12.5 #mm, distance from centerline of car to back sensors
@@ -211,6 +211,7 @@ class Car:
             self.speed = -MAX_SPEED
 
     def Turn(self, angle):
+
         old_angle = self.wheel_dir
         inst_steering_speed = self.PerSecondToPerCycle(STEERING_SPEED)
         dtheta = angle - self.wheel_dir
@@ -228,7 +229,7 @@ class Car:
             self.wheel_dir += dtheta
 
         if old_angle != self.wheel_dir:
-            delta = self.wheel_dir - old_angle
+            delta = self.wheel_dir * 0.95 - old_angle
             self.wheelbase = 120 + STEERING_AXLE_OFFSET * np.cos(self.wheel_dir) - STEERING_AXLE_OFFSET
             rel_x_wheel_movement = STEERING_AXLE_OFFSET * np.cos(delta) - STEERING_AXLE_OFFSET
             rel_y_wheel_movement = STEERING_AXLE_OFFSET * np.sin(delta)
@@ -244,10 +245,10 @@ class Car:
             self.dir = self.dir + np.arctan2(rel_y_wheel_movement, self.wheelbase)
 
     def Move(self, real, arena):
-        SLOWER_WHEN_TURNING = 0.45
-        SLOWER_WHEN_REVERSING = 0.93
+        SLOWER_WHEN_TURNING = 1
+        SLOWER_WHEN_REVERSING = 0.88 #measured: 0.93
         inst_speed = self.PerSecondToPerCycle(self.speed) if self.speed >= 0 else self.PerSecondToPerCycle(self.speed) * SLOWER_WHEN_REVERSING
-        inst_speed = inst_speed * np.cos(self.wheel_dir)**2 # Slower when turning
+        inst_speed = inst_speed * np.cos(self.wheel_dir)**(1/SLOWER_WHEN_TURNING) # Slower when turning
         self.x = self.x + inst_speed * np.cos(self.dir - self.wheel_dir/2)
         self.y = self.y - inst_speed * np.sin(self.dir - self.wheel_dir/2)
         self.dir = self.dir + inst_speed/self.wheelbase * np.tan(self.wheel_dir)
@@ -320,7 +321,7 @@ class Car:
         # --- CONSTANTS & THRESHOLDS ---
         CLOSE_LOCKON = 10        # mm
         CLOSE_UNLOCK = 25
-        TARGET_WIDTH = 30      # mm 
+        TARGET_WIDTH = 50      # mm 
         BACKUP_DIST = REAL_TURNING_RADIUS / 2
         LOCK_IN_ANGLE = np.pi / 60  # ~3 degrees
 
@@ -449,7 +450,7 @@ class Car:
 
 
     def DoSensorsAndStates(self, generated_arena, code_arena, arena, ignored_colours, real, auto):
-        WAYPOINT_TOLERANCE = 5 # mm
+        WAYPOINT_TOLERANCE = 10 # mm
         for sensor in self.esp.sensors.values():
             if real:
                 self.distance_data[sensor] = sensor.SenseRealDist()
@@ -460,7 +461,7 @@ class Car:
 
         if real:
             self.camera.UpdateImage()
-            self.LocateOnTrack()
+            #self.LocateOnTrack()
         for angle in self.camera_rays:
             if real:
                 self.colour_data[angle] = self.camera.SenseRealColour(angle)
@@ -507,6 +508,7 @@ class Car:
             self.FindTarget(arena)
             if self.state != "REVERSING_OUT":
                 self.state = "DONE"
+                return
             else:
                 self.speed = -1
 
@@ -524,7 +526,8 @@ class Car:
         #print(f"location: {self.x}, {self.y}")
 
     def LocateOnTrack(self):
-        SIM_BIAS = 0.5
+        SIM_BIAS = 0.3
+        MAX_JUMP = 80 # mm
         ANGLE_IGNORED = np.pi/6
         inst_speed = self.PerSecondToPerCycle(self.speed)
         x_guess = self.x
@@ -622,11 +625,10 @@ class Car:
         
         if in_bounds:
             dist_from_last = self.DistTo(x_guess, y_guess)
-            print(f"Updating to x:{self.x}, y:{self.y}, dir:{dir_guess}")
-            if dist_from_last < 50:
+            print(f"Updating from x:{self.x}, y:{self.y}, dir:{self.dir}")
+            print(f"Updating to x:{x_guess}, y:{y_guess}, dir:{dir_guess}")
+            if dist_from_last < MAX_JUMP:
                 self.x = self.x * SIM_BIAS + x_guess * (1-SIM_BIAS)
-
-            if dist_from_last < 50:
                 self.y = self.y * SIM_BIAS + y_guess * (1-SIM_BIAS)
 
             if abs(Normalise(dir_guess - self.dir)) < np.pi/6:
