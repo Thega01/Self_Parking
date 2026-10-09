@@ -245,10 +245,10 @@ class Car:
             self.dir = self.dir + np.arctan2(rel_y_wheel_movement, self.wheelbase)
 
     def Move(self, real, arena):
-        SLOWER_WHEN_TURNING = 1
+        SLOWER_WHEN_TURNING = 1.3
         SLOWER_WHEN_REVERSING = 0.88 #measured: 0.93
         inst_speed = self.PerSecondToPerCycle(self.speed) if self.speed >= 0 else self.PerSecondToPerCycle(self.speed) * SLOWER_WHEN_REVERSING
-        inst_speed = inst_speed * np.cos(self.wheel_dir)**(1/SLOWER_WHEN_TURNING) # Slower when turning
+        inst_speed = inst_speed * np.cos(self.wheel_dir * (1/SLOWER_WHEN_TURNING)) # Slower when turning
         self.x = self.x + inst_speed * np.cos(self.dir - self.wheel_dir/2)
         self.y = self.y - inst_speed * np.sin(self.dir - self.wheel_dir/2)
         self.dir = self.dir + inst_speed/self.wheelbase * np.tan(self.wheel_dir)
@@ -461,7 +461,7 @@ class Car:
 
         if real:
             self.camera.UpdateImage()
-            #self.LocateOnTrack()
+            self.LocateOnTrack()
         for angle in self.camera_rays:
             if real:
                 self.colour_data[angle] = self.camera.SenseRealColour(angle)
@@ -528,7 +528,7 @@ class Car:
     def LocateOnTrack(self):
         SIM_BIAS = 0.3
         MAX_JUMP = 80 # mm
-        ANGLE_IGNORED = np.pi/6
+        ANGLE_IGNORED = np.pi/5
         inst_speed = self.PerSecondToPerCycle(self.speed)
         x_guess = self.x
         y_guess = self.y
@@ -543,11 +543,11 @@ class Car:
             hit = self.hit_data[sensor]
             dist = self.distance_data[sensor]
 
-            if hit[0] is not None:
+            if hit[0] is not None and (abs(sensor.dir) > ANGLE_IGNORED and abs(sensor.dir) < np.pi - ANGLE_IGNORED) :
                 x_guesses[sensor] = hit[0] + (self.x - sensor.x) - dist * np.cos(sensor.dir)
                 hit_1d[sensor] = hit[0]
 
-            if hit[1] is not None:
+            if hit[1] is not None and (abs(sensor.dir) > np.pi / 2 - ANGLE_IGNORED and abs(sensor.dir) < np.pi / 2 + ANGLE_IGNORED):
                 y_guesses[sensor] = hit[1] + (self.y - sensor.y) + dist * np.sin(sensor.dir)
                 hit_1d[sensor] = hit[1]
         
@@ -631,7 +631,7 @@ class Car:
                 self.x = self.x * SIM_BIAS + x_guess * (1-SIM_BIAS)
                 self.y = self.y * SIM_BIAS + y_guess * (1-SIM_BIAS)
 
-            if abs(Normalise(dir_guess - self.dir)) < np.pi/6:
+            if abs(Normalise(dir_guess - self.dir)) < np.pi/12:
                 self.dir = self.dir * SIM_BIAS + dir_guess * (1-SIM_BIAS)
 
     def PointInRect(self, x, y, rect):

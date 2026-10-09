@@ -15,7 +15,7 @@ class Esp32:
         self.sending_angle = self.SetTurningAngle(parent.wheel_dir)
 
     def SetMotorSpeed(self, mmPerSec):
-        MIN_MOVE = 176
+        MIN_MOVE = 200
         MAX_MOVE = 255
         CONVERSION_FACTOR = (MAX_MOVE - MIN_MOVE) / Car.MAX_SPEED
         self.sending_speed = mmPerSec * CONVERSION_FACTOR + MIN_MOVE * np.sign(mmPerSec) if abs(mmPerSec) > 5 else 0# takes -255 to -255
