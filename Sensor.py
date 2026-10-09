@@ -97,6 +97,7 @@ class PID(Sensor):
     def __init__(self, x, y, dir, parent, initial_sense):
         super().__init__(x, y, dir, parent)
         self.last_sensed = initial_sense
+        self.offset = 0
 
     def SenseSimDist(self, arena):
         img = arena.img
@@ -117,4 +118,4 @@ class PID(Sensor):
 
 
     def SenseRealDist(self):
-        return self.last_sensed
+        return self.last_sensed + self.offset

@@ -532,15 +532,21 @@ class Car:
         #get real and sim distances
         real_d_left = (self.esp.sensors["LEFT"]).SenseRealDist()
         sim_d_left =  (self.sensors["LEFT"]).SenseSimDist(arena)
-        print("here1")
         #filter out bad readings: 
         print(f"real: {real_d_left} sim: {sim_d_left}")
         if abs(real_d_left - sim_d_left) < TOLERANCE:
             return
-        print("here2")
         #if d_left is more than we thought shift car sim right
         self.y = self.y + (real_d_left - sim_d_left) * BANG_GAIN
-        
+    
+    def CalibrateSensors(self, arena):
+        """get real and sim distances for each sensor then assign the sensor offset"""
+        for sensor in self.esp.sensors:
+            real_d = sensor.SenseRealDist()
+            sim_d =  sensor.SenseSimDist()
+            sensor.offset = sim_d - real_d
+    
+          
     def LocateOnTrack(self):
         SIM_BIAS = 0.3
         MAX_JUMP = 80 # mm
