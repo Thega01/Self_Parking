@@ -541,9 +541,10 @@ class Car:
     
     def CalibrateSensors(self, arena):
         """get real and sim distances for each sensor then assign the sensor offset"""
-        for sensor in self.esp.sensors:
+        for sensor in self.esp.sensors.values():
+
             real_d = sensor.SenseRealDist()
-            sim_d =  sensor.SenseSimDist()
+            sim_d =  sensor.SenseSimDist(arena)
             sensor.offset = sim_d - real_d
     
           

@@ -76,7 +76,9 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
             print (i)
             car.esp.SendRequest(arena)
             car.camera.UpdateImage()
+            car.CalibrateSensors(arena)
             cv.waitKey(1000)
+
 
     car.UpdateClockDiff()
     while (car.state != "DONE"):

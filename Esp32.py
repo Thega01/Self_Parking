@@ -49,9 +49,9 @@ class Esp32:
             print(distances)
             if len(distances) > 0:
                 for sensor, distance in distances.items():
-                    distance = int(distance)
+                    distance = float(distance)
                     if distance > 10:
-                        self.sensors[sensor].last_sensed = distance * 0.25 + self.sensors[sensor].last_sensed * 0.75
+                        self.sensors[sensor].last_sensed = distance * 0.2 + self.sensors[sensor].last_sensed * 0.8
                         print(f"{sensor} sensor hit: {distance}")
                     else:
                         self.sensors[sensor].last_sensed = self.sensors[sensor].SenseSimDist(arena)
