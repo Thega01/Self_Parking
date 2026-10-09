@@ -524,7 +524,20 @@ class Car:
         #print(f"Target: {self.target_x}, {self.target_y}")
         #print(f"Dist to: {self.DistTo(self.target_x, self.target_y)}")
         #print(f"location: {self.x}, {self.y}")
-
+    def LeftBangBangShift(self):
+        BANG_GAIN = 0.2
+        TOLERANCE = 6
+        #get real and sim distances
+        real_d_left = (self.esp.sensors["LEFT"]).SenseRealDist()
+        sim_d_left =  (self.sensors["LEFT"]).SenseSimDist()
+        
+        #filter out bad readings: 
+        if abs(real_d_left) + TOLERANCE > abs(sim_d_left) or abs(real_d_left) - TOLERANCE < abs(sim_d_left):
+            return
+        
+        #if d_left is more than we thought shift car sim right
+        self.y = self.y + (real_d_left - sim_d_left) * BANG_GAIN
+        
     def LocateOnTrack(self):
         SIM_BIAS = 0.3
         MAX_JUMP = 80 # mm
