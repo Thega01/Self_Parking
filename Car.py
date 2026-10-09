@@ -481,7 +481,8 @@ class Car:
                
         elif self.state == "SEARCHING_FOR_TARGET":
             #print(self.DistTo(self.target_x,self.target_y))
-            self.LeftBangBangShift()
+            if real:
+                self.LeftBangBangShift()
             self.FindTarget(arena)
             self.MoveTo(self.target_x, self.target_y, 0)
             if self.DistTo(self.target_x, self.target_y) < WAYPOINT_TOLERANCE and self.state == "SEARCHING_FOR_TARGET":
