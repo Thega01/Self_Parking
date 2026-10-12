@@ -23,7 +23,7 @@ REAR_AXLE_POS = 20 #mm
 WHEEL_INSET = 20 #mm
 STEERING_AXLE_OFFSET = 8 #mm
 STEERING_SPEED = 2 #rad/sec
-MAX_SPEED = 33.3 #mm/sec #33.3 is real (measured)
+MAX_SPEED = 41 #mm/sec #33.3 is real (measured)
 ACCELERATION_LIMIT = 600 #mm/sec^2
 DRAG = 0.96
 BACK_SENSOR_OFFSET = 12.5 #mm, distance from centerline of car to back sensors
@@ -87,6 +87,7 @@ class Car:
         self.y = centerY
         self.dir = direction
         self.speed = 0
+        self.inst_speed = 0
         self.wheel_dir = 0
         self.wheelbase = 120 
         self.state = "UNINITIALISED"
@@ -113,11 +114,11 @@ class Car:
 
         self.camera_rays = (
             np.pi/6,
-            np.pi/8,
-            np.pi/12,
+            np.pi/10,
+            np.pi/18,
             0,
-            -np.pi/12,
-            -np.pi/8,
+            -np.pi/18,
+            -np.pi/10,
             -np.pi/6
         )
 
@@ -245,8 +246,8 @@ class Car:
             self.dir = self.dir + np.arctan2(rel_y_wheel_movement, self.wheelbase)
 
     def Move(self, real, arena):
-        SLOWER_WHEN_TURNING = 1.3
-        SLOWER_WHEN_REVERSING = 0.88 #measured: 0.93
+        SLOWER_WHEN_TURNING = 0.65
+        SLOWER_WHEN_REVERSING = 0.93 #measured: 0.93 #earlier, 0.88
         inst_speed = self.PerSecondToPerCycle(self.speed) if self.speed >= 0 else self.PerSecondToPerCycle(self.speed) * SLOWER_WHEN_REVERSING
         inst_speed = inst_speed * np.cos(self.wheel_dir * (1/SLOWER_WHEN_TURNING)) # Slower when turning
         self.x = self.x + inst_speed * np.cos(self.dir - self.wheel_dir/2)
@@ -321,7 +322,7 @@ class Car:
         # --- CONSTANTS & THRESHOLDS ---
         CLOSE_LOCKON = 10        # mm
         CLOSE_UNLOCK = 25
-        TARGET_WIDTH = 50      # mm 
+        TARGET_WIDTH = 60      # mm 
         BACKUP_DIST = REAL_TURNING_RADIUS / 2
         LOCK_IN_ANGLE = np.pi / 60  # ~3 degrees
 
@@ -469,7 +470,7 @@ class Car:
                 self.colour_data[angle] = self.camera.SenseSimColour(generated_arena, angle)
             if self.colour_data[angle] is not None:
                 #print(f"colour {self.colour_data[angle]} at angle {angle}")
-                if not self.state == "PARKING":
+                if not self.state in ["PARKING", "REVERSING_OUT"]:
                     self.InterpretCameraData(arena, code_arena, angle, self.colour_data[angle], ignored_colours)
         
         if not auto:
@@ -489,6 +490,7 @@ class Car:
                 self.state = "DONE"
                 
         elif self.state == "PREPARING_TO_PARK":
+            self.LeftBangBangShift(arena)
             self.FindTarget(arena)
             self.MoveTo(self.target_x, self.target_y, 0)
             if self.DistTo(self.target_x, self.target_y) < WAYPOINT_TOLERANCE:
@@ -498,6 +500,8 @@ class Car:
         elif self.state == "PARKING":
             self.FindTarget(arena)
             self.MoveTo(self.target_x, self.target_y, np.pi* 3 / 2)
+            if abs(Normalise(self.dir - np.pi * 3/2)) < np.pi / 20:
+                self.BackBangBangShift(arena)
             if self.DistTo(self.target_x, self.target_y) < WAYPOINT_TOLERANCE and self.state == "PARKING": 
                 self.state = "PARKED"
 
@@ -533,11 +537,38 @@ class Car:
         real_d_left = (self.esp.sensors["LEFT"]).SenseRealDist()
         sim_d_left =  (self.sensors["LEFT"]).SenseSimDist(arena)
         #filter out bad readings: 
-        print(f"real: {real_d_left} sim: {sim_d_left}")
+        #print(f"real: {real_d_left} sim: {sim_d_left}")
         if abs(real_d_left - sim_d_left) < TOLERANCE:
             return
         #if d_left is more than we thought shift car sim right
         self.y = self.y + (real_d_left - sim_d_left) * BANG_GAIN
+
+    def BackBangBangShift(self, arena):
+        BANG_GAIN = 1
+        TOLERANCE = 6
+        #get real and sim distances
+        real_d_1 = (self.esp.sensors["BACK1"]).SenseRealDist()
+        sim_d_1 =  (self.sensors["BACK1"]).SenseSimDist(arena)
+        real_d_2 = (self.esp.sensors["BACK2"]).SenseRealDist()
+        sim_d_2 =  (self.sensors["BACK2"]).SenseSimDist(arena)
+        #filter out bad readings: 
+        #print(f"real: {real_d_left} sim: {sim_d_left}")
+        valid_1 = 0
+        valid_2 = 0
+        if abs(real_d_1 - sim_d_1) < TOLERANCE:
+            valid_1 = 1
+        if abs(real_d_2 - sim_d_2) < TOLERANCE:
+            valid_2 = 1
+        #if both are false, skip, otherwise average valid values
+        valid = np.array([valid_1, valid_2])
+        if np.sum(valid) == 0:
+            return
+        dists = np.array([[real_d_1, real_d_2], [sim_d_1, sim_d_2]])
+        avg_valid_dists = np.dot(dists, valid) / np.sum(valid)
+
+        #if d_left is more than we thought shift car sim right
+        self.y = self.y + (avg_valid_dists[0] - avg_valid_dists[1]) * BANG_GAIN
+
     
     def CalibrateSensors(self, arena):
         """get real and sim distances for each sensor then assign the sensor offset"""
@@ -549,7 +580,7 @@ class Car:
     
           
     def LocateOnTrack(self):
-        SIM_BIAS = 0.3
+        SIM_BIAS = 0.5
         MAX_JUMP = 80 # mm
         ANGLE_IGNORED = np.pi/5
         inst_speed = self.PerSecondToPerCycle(self.speed)
@@ -648,14 +679,16 @@ class Car:
         
         if in_bounds:
             dist_from_last = self.DistTo(x_guess, y_guess)
-            print(f"Updating from x:{self.x}, y:{self.y}, dir:{self.dir}")
-            print(f"Updating to x:{x_guess}, y:{y_guess}, dir:{dir_guess}")
+            #print(f"Updating from x:{self.x}, y:{self.y}, dir:{self.dir}")
+            #print(f"Updating to x:{x_guess}, y:{y_guess}, dir:{dir_guess}")
             if dist_from_last < MAX_JUMP:
-                self.x = self.x * SIM_BIAS + x_guess * (1-SIM_BIAS)
-                self.y = self.y * SIM_BIAS + y_guess * (1-SIM_BIAS)
+                self.x = self.x * SIM_BIAS + x_guess * (1-SIM_BIAS) + self.inst_speed * np.cos(self.dir)
+                self.y = self.y * SIM_BIAS + y_guess * (1-SIM_BIAS) - self.inst_speed * np.sin(self.dir)
 
-            if abs(Normalise(dir_guess - self.dir)) < np.pi/12:
-                self.dir = self.dir * SIM_BIAS + dir_guess * (1-SIM_BIAS)
+            # if abs(Normalise(dir_guess - self.dir)) < np.pi/12:
+            #     self.dir = self.dir * SIM_BIAS + dir_guess * (1-SIM_BIAS)
+            #     if self.inst_speed != 0:
+            #         self.dir - np.arcsin((self.wheel_dir/2)/self.inst_speed) 
 
     def PointInRect(self, x, y, rect):
         if rect.pt1[0] <= x and rect.pt2[0] >= x and rect.pt1[1] <= y and rect.pt2[1] >= y:

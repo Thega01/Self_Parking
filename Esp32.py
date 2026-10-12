@@ -46,16 +46,16 @@ class Esp32:
             content_array = content.split(" ")
             #make a dictionary of content and types
             distances = dict(zip(type_array, content_array))
-            print(distances)
+            #print(distances)
             if len(distances) > 0:
                 for sensor, distance in distances.items():
                     distance = float(distance)
                     if distance > 10:
                         self.sensors[sensor].last_sensed = distance * 0.2 + self.sensors[sensor].last_sensed * 0.8
-                        print(f"{sensor} sensor hit: {distance}")
+                        #print(f"{sensor} sensor hit: {distance}")
                     else:
                         self.sensors[sensor].last_sensed = self.sensors[sensor].SenseSimDist(arena)
-                    print(f"{sensor}: {self.sensors[sensor].last_sensed}")
+                    #print(f"{sensor}: {self.sensors[sensor].last_sensed}")
             return
         except Exception as e:
             print("Error: ", e)

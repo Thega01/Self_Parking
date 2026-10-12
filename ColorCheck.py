@@ -14,10 +14,10 @@ lowerColor2 = np.array([])
 upperColor2 = np.array([])
 
 range = 8 #range for hue
-satRange = 60 #saturation range
-valRange = 60 #range for value
+satRange = 80 #saturation range
+valRange = 80 #range for value
 
-BLACK_THRESH = 30 # value cutoff for black
+BLACK_THRESH = 28 # value cutoff for black
 
 CAMERA_VIEW_ANGLE = 67.59 #total camera view angle
 START_SCAN_ANGLE = 67.59 - 57 #ACW from 0 degrees
@@ -69,10 +69,10 @@ def ScanStart(image):
         real_color2 = np.array([myHue2, mySat2, myVal2])
         if myHue1 + range >= 180:
             lowerHue1 = myHue1 - range
-            upperHue1 = 180
+            upperHue1 = 180 - myHue1 + range
         elif myHue1 - range <= 0:
             upperHue1 = myHue1 + range
-            lowerHue1 = 0   
+            lowerHue1 = 180 + (myHue1 - range)   
         else:
             lowerHue1 = myHue1 - range
             upperHue1 = myHue1 + range
@@ -101,10 +101,10 @@ def ScanStart(image):
             
         if myHue2 + range >= 180:
             lowerHue2 = myHue2 - range
-            upperHue2 = 180
+            upperHue2 = 180 - (myHue2 + range)
         elif myHue2 - range <= 0:
             upperHue2 = myHue2 + range
-            lowerHue2 = 0   
+            lowerHue2 = 180 + (myHue2 - range)
         else:
             lowerHue2 = myHue2 - range
             upperHue2 = myHue2 + range
@@ -138,6 +138,7 @@ def ScanStart(image):
         #set colour 2
         lowerColor2 = np.array([lowerHue2, lowerSat2, lowerVal2], dtype=np.uint8)
         upperColor2 = np.array([upperHue2, 255, 255], dtype=np.uint8)
+
         print('color 2: ', lowerHue2, upperHue2, lowerSat2, upperSat2, lowerVal2, upperVal2)
     except Exception as e:
         exception_type, exception_object, traceback = sys.exc_info()
@@ -148,10 +149,21 @@ def ScanStart(image):
 #uses contours to check an hsv image for colour
 def CheckColour(hsv, upperCo, lowerCo):
     try:
-        
+        upper_hue, upper_sat, upper_val = tuple(item for item in upperCo)
+        lower_hue, lower_sat, lower_val = tuple(item for item in lowerCo)
         #make a mask with only our colours
         #get mask size: if it is 10 pixels it is the colour
         mask =  cv.inRange(hsv, lowerCo, upperCo) #get the part of trimmed HSV that is our colour
+        #print(f"upper_hue, lower_hue: {upper_hue}, {lower_hue}")
+        if upper_hue < lower_hue:
+            lower_colour_1 = np.array([0, lower_sat, lower_val], dtype=np.uint8)
+            lower_colour_2 = np.array([lower_hue, lower_sat, lower_val], dtype=np.uint8)
+            upper_colour_1 = np.array([upper_hue, upper_sat, upper_val], dtype=np.uint8)
+            upper_colour_2 = np.array([180, upper_sat, upper_val], dtype=np.uint8)
+            #print(f"1 l:{lower_colour_1} u: {upper_colour_1}, 2 l:{lower_colour_2} u: {upper_colour_2}")
+            mask1 = cv.inRange(hsv, lower_colour_1, upper_colour_1)
+            mask2 = cv.inRange(hsv, lower_colour_2, upper_colour_2)
+            mask = cv.bitwise_or(mask1, mask2)
         #slice = cv.bitwise_and(hsv, hsv, mask = mask)
         _,mask = cv.threshold(mask, 10 ,255, cv.THRESH_BINARY) #black and white overlay image
         myContours = np.array([])
