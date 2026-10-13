@@ -4,6 +4,9 @@ import requests
 
 IP = "http://10.42.0.58"
 
+def TransformSensorData(dist):
+    return 0.0005 * dist **2 + 0.7649 * dist + 19.258
+
 class Esp32:
     def __init__(self, connectioninfo, parent, sensors):
         self.connectioninfo = connectioninfo
@@ -23,10 +26,11 @@ class Esp32:
     def SetTurningAngle(self, rads):
         #servo takes angle from the end, and actuated angle doesn't line up with sent angle.
         degs = np.rad2deg(rads)
-        self.sending_angle = 64.5 + degs * 1.4 #66.3 is old num
+        self.sending_angle = 65 + degs * 1.4 #66.3 is old num
         
 
     def SendRequest(self, arena):
+        SIM_BIAS = 0.2
         try:
                 
             request_headers = {
@@ -51,11 +55,11 @@ class Esp32:
                 for sensor, distance in distances.items():
                     distance = float(distance)
                     if distance > 10:
-                        self.sensors[sensor].last_sensed = distance * 0.2 + self.sensors[sensor].last_sensed * 0.8
+                        self.sensors[sensor].last_sensed = TransformSensorData(distance) * (1-SIM_BIAS) + self.sensors[sensor].last_sensed * SIM_BIAS
                         #print(f"{sensor} sensor hit: {distance}")
                     else:
                         self.sensors[sensor].last_sensed = self.sensors[sensor].SenseSimDist(arena)
-                    #print(f"{sensor}: {self.sensors[sensor].last_sensed}")
+                    print(f"{sensor}: {self.sensors[sensor].last_sensed}")
             return
         except Exception as e:
             print("Error: ", e)

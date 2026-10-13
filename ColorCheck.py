@@ -14,14 +14,14 @@ lowerColor2 = np.array([])
 upperColor2 = np.array([])
 
 range = 8 #range for hue
-satRange = 80 #saturation range
-valRange = 80 #range for value
+satRange = 100 #saturation range
+valRange = 100 #range for value
 
 BLACK_THRESH = 28 # value cutoff for black
 
 CAMERA_VIEW_ANGLE = 67.59 #total camera view angle
-START_SCAN_ANGLE = 67.59 - 57 #ACW from 0 degrees
-BLOCK_SEPARATION = 5 #pixels between the two start colours
+START_SCAN_ANGLE = 67.59 - 54 #ACW from 0 degrees
+BLOCK_SEPARATION = 7 #pixels between the two start colours
 BLOCK_WIDTH = 8 #width of start scan colour avg blocks
 SCAN_THICKNESS = 10  #vertical height of our scan band (both normal scans and start scan)
 SCAN_HEIGHT = 10 #how far to offset scan from center height

@@ -23,7 +23,7 @@ REAR_AXLE_POS = 20 #mm
 WHEEL_INSET = 20 #mm
 STEERING_AXLE_OFFSET = 8 #mm
 STEERING_SPEED = 2 #rad/sec
-MAX_SPEED = 41 #mm/sec #33.3 is real (measured)
+MAX_SPEED = 40.5 #mm/sec #33.3 is real (measured)
 ACCELERATION_LIMIT = 600 #mm/sec^2
 DRAG = 0.96
 BACK_SENSOR_OFFSET = 12.5 #mm, distance from centerline of car to back sensors
@@ -246,10 +246,13 @@ class Car:
             self.dir = self.dir + np.arctan2(rel_y_wheel_movement, self.wheelbase)
 
     def Move(self, real, arena):
-        SLOWER_WHEN_TURNING = 0.65
-        SLOWER_WHEN_REVERSING = 0.93 #measured: 0.93 #earlier, 0.88
+        SLOWER_WHEN_TURNING = 2.2 #1.7 #bigger makes sim faster (Noah)
+        SLOWER_WHEN_REVERSING = 0.97 #measured: 0.93 #earlier, 0.88
+        SLOWER_WHEN_R_AND_T = 0.9
         inst_speed = self.PerSecondToPerCycle(self.speed) if self.speed >= 0 else self.PerSecondToPerCycle(self.speed) * SLOWER_WHEN_REVERSING
         inst_speed = inst_speed * np.cos(self.wheel_dir * (1/SLOWER_WHEN_TURNING)) # Slower when turning
+        if inst_speed < 0 and abs(self.wheel_dir) > np.pi/10:
+            inst_speed = inst_speed * SLOWER_WHEN_R_AND_T
         self.x = self.x + inst_speed * np.cos(self.dir - self.wheel_dir/2)
         self.y = self.y - inst_speed * np.sin(self.dir - self.wheel_dir/2)
         self.dir = self.dir + inst_speed/self.wheelbase * np.tan(self.wheel_dir)
@@ -500,7 +503,7 @@ class Car:
         elif self.state == "PARKING":
             self.FindTarget(arena)
             self.MoveTo(self.target_x, self.target_y, np.pi* 3 / 2)
-            if abs(Normalise(self.dir - np.pi * 3/2)) < np.pi / 20:
+            if abs(Normalise(self.dir - np.pi * 3/2)) < np.pi / 12:
                 self.BackBangBangShift(arena)
             if self.DistTo(self.target_x, self.target_y) < WAYPOINT_TOLERANCE and self.state == "PARKING": 
                 self.state = "PARKED"
@@ -508,15 +511,15 @@ class Car:
         elif self.state == "PARKED":
             self.speed = 0
             self.Move(real, arena)
-            
-            cv.waitKey(0)
+
+            cv.waitKey(10000)
             self.UpdateClockDiff()
             self.FindTarget(arena)
             if self.state != "REVERSING_OUT":
                 self.state = "DONE"
                 return
             else:
-                self.speed = -1
+                self.speed = 0
 
         elif self.state == "REVERSING_OUT":
             self.MoveTo(self.target_x, self.target_y, 0)
@@ -532,48 +535,39 @@ class Car:
         #print(f"location: {self.x}, {self.y}")
     def LeftBangBangShift(self, arena):
         BANG_GAIN = 1
-        TOLERANCE = 6
+        TOLERANCE = 100
         #get real and sim distances
         real_d_left = (self.esp.sensors["LEFT"]).SenseRealDist()
         sim_d_left =  (self.sensors["LEFT"]).SenseSimDist(arena)
         #filter out bad readings: 
         #print(f"real: {real_d_left} sim: {sim_d_left}")
-        if abs(real_d_left - sim_d_left) < TOLERANCE:
+        if abs(real_d_left - sim_d_left) > TOLERANCE:
             return
         #if d_left is more than we thought shift car sim right
         self.y = self.y + (real_d_left - sim_d_left) * BANG_GAIN
+        #and correct angle slightly
+        self.dir = self.dir - np.pi / 80 * np.sign(real_d_left - sim_d_left) * np.sign(self.speed) * self.dt
 
     def BackBangBangShift(self, arena):
-        BANG_GAIN = 1
-        TOLERANCE = 6
+        BANG_GAIN = 1.2
+        LOCK_IN_ANGLE = np.pi/20
         #get real and sim distances
-        real_d_1 = (self.esp.sensors["BACK1"]).SenseRealDist()
-        sim_d_1 =  (self.sensors["BACK1"]).SenseSimDist(arena)
-        real_d_2 = (self.esp.sensors["BACK2"]).SenseRealDist()
-        sim_d_2 =  (self.sensors["BACK2"]).SenseSimDist(arena)
+        real_d_back = (self.esp.sensors["BACK2"]).SenseRealDist()
+        sim_d_back =  (self.sensors["BACK2"]).SenseSimDist(arena)
         #filter out bad readings: 
         #print(f"real: {real_d_left} sim: {sim_d_left}")
-        valid_1 = 0
-        valid_2 = 0
-        if abs(real_d_1 - sim_d_1) < TOLERANCE:
-            valid_1 = 1
-        if abs(real_d_2 - sim_d_2) < TOLERANCE:
-            valid_2 = 1
-        #if both are false, skip, otherwise average valid values
-        valid = np.array([valid_1, valid_2])
-        if np.sum(valid) == 0:
+        # if abs(real_d_back - sim_d_back) > TOLERANCE:
+        #     return
+        if abs(Normalise(self.dir - np.pi * 3/2)) > LOCK_IN_ANGLE:
             return
-        dists = np.array([[real_d_1, real_d_2], [sim_d_1, sim_d_2]])
-        avg_valid_dists = np.dot(dists, valid) / np.sum(valid)
-
-        #if d_left is more than we thought shift car sim right
-        self.y = self.y + (avg_valid_dists[0] - avg_valid_dists[1]) * BANG_GAIN
+        #if d_back is more than we thought shift car sim right
+        self.y = self.y + (real_d_back - sim_d_back) * BANG_GAIN + self.inst_speed * 10
 
     
     def CalibrateSensors(self, arena):
         """get real and sim distances for each sensor then assign the sensor offset"""
-        for sensor in self.esp.sensors.values():
-
+        cal_sensors = [self.esp.sensors["LEFT"], self.esp.sensors["RIGHT"]]
+        for sensor in cal_sensors:
             real_d = sensor.SenseRealDist()
             sim_d =  sensor.SenseSimDist(arena)
             sensor.offset = sim_d - real_d
@@ -712,7 +706,7 @@ class Car:
         (x, y) = self.camera.FindRayIntercept(arena.img, angle)
         if not any(np.array_equal(colour, bad_colour) for bad_colour in ignored_colours):
             #print(f"drawing colour: {colour}")
-            for rect in (arena.start_rects):
+            for rect in [rect for rect in (arena.start_rects) if not rect.filled]:
                 if self.PointInRect(x, y, rect):
                     rect.colour = colour
                     rect.Draw(arena.img)
@@ -734,6 +728,7 @@ class Car:
                         rect.Draw(arena.img)
 
     def FindTarget(self, arena):
+        PARK_OFFSET = 15
         if self.state == "DONE" or self.state == "REVERSING OUT":
             pass
 
@@ -760,6 +755,7 @@ class Car:
                 self.target_y = arena.start_pos[1] - 10
             if self.state == "PARKING":
                 (self.target_x, self.target_y) = target_park.center
+                self.target_y -= PARK_OFFSET
                 return
             if self.state == "PREPARING_TO_PARK":
                 self.target_x = target_park.center[0] - REAL_TURNING_RADIUS
