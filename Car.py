@@ -14,16 +14,16 @@ LENGTH = 179 #mm
 CAR_SIZE = (LENGTH, WIDTH)
 WHEEL_SIZE = (23, 15)
 TURNING_RADIUS = 245 # mm
-REAL_TURNING_RADIUS = TURNING_RADIUS * 1.22
+REAL_TURNING_RADIUS = TURNING_RADIUS * 1.2
 COLOUR = (80,80,80)
 WHEEL_COLOUR = (0,0,0)
 
 #distances are from back right corner. 0, 0 (car coordinates) is at the back right corner, x extends positive to the front of the car, y extends positive to the right of the car.
-REAR_AXLE_POS = 20 #mm
+REAR_AXLE_POS = 20 #mms
 WHEEL_INSET = 20 #mm
 STEERING_AXLE_OFFSET = 8 #mm
 STEERING_SPEED = 2 #rad/sec
-MAX_SPEED = 40.5 #mm/sec #33.3 is real (measured)
+MAX_SPEED = 42 #mm/sec #33.3 is real (measured)
 ACCELERATION_LIMIT = 600 #mm/sec^2
 DRAG = 0.96
 BACK_SENSOR_OFFSET = 12.5 #mm, distance from centerline of car to back sensors
@@ -246,19 +246,26 @@ class Car:
             self.dir = self.dir + np.arctan2(rel_y_wheel_movement, self.wheelbase)
 
     def Move(self, real, arena):
-        SLOWER_WHEN_TURNING = 2.2 #1.7 #bigger makes sim faster (Noah)
-        SLOWER_WHEN_REVERSING = 0.97 #measured: 0.93 #earlier, 0.88
-        SLOWER_WHEN_R_AND_T = 0.9
-        inst_speed = self.PerSecondToPerCycle(self.speed) if self.speed >= 0 else self.PerSecondToPerCycle(self.speed) * SLOWER_WHEN_REVERSING
-        inst_speed = inst_speed * np.cos(self.wheel_dir * (1/SLOWER_WHEN_TURNING)) # Slower when turning
-        if inst_speed < 0 and abs(self.wheel_dir) > np.pi/10:
-            inst_speed = inst_speed * SLOWER_WHEN_R_AND_T
+        MULT_WHEN_F_AND_T = 1 #1.7 #bigger makes sim faster (Noah)slower(david)
+        MULT_WHEN_R_AND_NOT_T = 0.97 #measured: 0.93 #earlier, 0.88
+        MULT_WHEN_R_AND_T = 0.9
+        STEERING_MULT_WHEN_RT = 0.767 #measured 0.767
+        inst_speed = self.PerSecondToPerCycle(self.speed)
+        target_wheel_dir = self.wheel_dir
+        if abs(self.wheel_dir) > np.pi/10:
+            if inst_speed > 0:
+                inst_speed = inst_speed * MULT_WHEN_F_AND_T
+            else:
+                inst_speed = inst_speed * MULT_WHEN_R_AND_T
+                target_wheel_dir = target_wheel_dir * STEERING_MULT_WHEN_RT
+        elif inst_speed < 0:
+                inst_speed = inst_speed * MULT_WHEN_R_AND_NOT_T
         self.x = self.x + inst_speed * np.cos(self.dir - self.wheel_dir/2)
         self.y = self.y - inst_speed * np.sin(self.dir - self.wheel_dir/2)
         self.dir = self.dir + inst_speed/self.wheelbase * np.tan(self.wheel_dir)
 
         if real:
-            self.esp.SetTurningAngle(self.wheel_dir)
+            self.esp.SetTurningAngle(target_wheel_dir)
             self.esp.SetMotorSpeed(self.speed)
             self.esp.SendRequest(arena)
 
@@ -344,7 +351,7 @@ class Car:
         dtheta_parr = Normalise(target_dir - self.dir)
         
         turning_dist_forwards = REAL_TURNING_RADIUS * (1 - np.cos(dtheta_parr))
-        turning_dist_backwards = TURNING_RADIUS * (1 - np.cos(dtheta_parr)) * 0.8
+        turning_dist_backwards = TURNING_RADIUS * (1 - np.cos(dtheta_parr)) * 0.78
 
         # Check if car's nose points toward the target line
         side = 1.0 if d_perp >= 0 else -1.0
@@ -373,7 +380,10 @@ class Car:
             self.movement_state = "DRIVING_TOWARDS"
         elif self.movement_state == "BACKING_UP":
             if dist_to_target > BACKUP_DIST:
-                self.movement_state = "DRIVING_TOWARDS"
+                if in_target_zone:
+                    self.movement_state = "TRACKING_LINE"
+                else:
+                    self.movement_state = "DRIVING_TOWARDS"
         
 
         elif self.movement_state == "TURNING_FORWARDS":
@@ -454,7 +464,7 @@ class Car:
 
 
     def DoSensorsAndStates(self, generated_arena, code_arena, arena, ignored_colours, real, auto):
-        WAYPOINT_TOLERANCE = 10 # mm
+        WAYPOINT_TOLERANCE = 12 # mm
         for sensor in self.esp.sensors.values():
             if real:
                 self.distance_data[sensor] = sensor.SenseRealDist()
@@ -728,7 +738,7 @@ class Car:
                         rect.Draw(arena.img)
 
     def FindTarget(self, arena):
-        PARK_OFFSET = 15
+        PARK_OFFSET = 23
         if self.state == "DONE" or self.state == "REVERSING OUT":
             pass
 
@@ -752,7 +762,7 @@ class Car:
                 self.visited_colours.append(target_park_rect.colour)
                 self.state = "REVERSING_OUT"
                 self.target_x = target_park.center[0] + 50# - REAL_TURNING_RADIUS
-                self.target_y = arena.start_pos[1] - 10
+                self.target_y = arena.start_pos[1] - 50
             if self.state == "PARKING":
                 (self.target_x, self.target_y) = target_park.center
                 self.target_y -= PARK_OFFSET

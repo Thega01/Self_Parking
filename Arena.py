@@ -26,7 +26,7 @@ PARKED_CAR_COLOUR = (0,0,0)
 WALL_COLOUR = (181, 228, 255)
 CORNER_SENSOR_BUFFER = 100 # mm
 CAR_SENSOR_BUFFER = 10 #mm
-COLOUR_RECT_BUFFER = 10 #mm
+COLOUR_RECT_BUFFER = 15 #mm
 
 COLOUR_CODE = {     #colour codes for known x, y walls in colour coded arena
     (110,0,0): (0, None),

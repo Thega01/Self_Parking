@@ -71,6 +71,7 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
     #camera_subprocess = subprocess.Popen([sys.executable, "CameraConnection.py"]) #starts getting images from camera
     car.esp.SetMotorSpeed(0)
     car.esp.SetTurningAngle(0)
+    
     if real:
         for i in range(10, 0, -1):
             print (i)
@@ -78,6 +79,8 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
             car.esp.SendRequest(arena)
             car.CalibrateSensors(arena)
             cv.waitKey(300)
+        car.camera.CameraOn(is_on = True)
+        car.camera.UpdateImage()
 
 
     car.UpdateClockDiff()
@@ -119,9 +122,6 @@ while True:
     arena = Arena.Arena(COLOURS)
     (x, y) = arena.start_pos
     car = Car.Car(x, y, start_angle)        
-    if real:
-            cv.waitKey(1000)
-            car.camera.CameraOn(is_on = True)
     if not auto:
         RunManually.StartController()
     #RunManually(arena, generated_arena, car, real)
