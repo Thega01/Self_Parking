@@ -72,12 +72,12 @@ def RunCar(arena, generated_arena, code_arena, car, real, auto):
     car.esp.SetMotorSpeed(0)
     car.esp.SetTurningAngle(0)
     if real:
-        for i in range(12, 0, -1):
+        for i in range(10, 0, -1):
             print (i)
             car.camera.UpdateImage()
             car.esp.SendRequest(arena)
             car.CalibrateSensors(arena)
-            cv.waitKey(400)
+            cv.waitKey(300)
 
 
     car.UpdateClockDiff()
