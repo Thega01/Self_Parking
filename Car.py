@@ -247,7 +247,7 @@ class Car:
 
     def Move(self, real, arena):
         MULT_WHEN_F_AND_T = 1 #1.7 #bigger makes sim faster (Noah)slower(david)
-        MULT_WHEN_R_AND_NOT_T = 0.97 #measured: 0.93 #earlier, 0.88
+        MULT_WHEN_R_AND_NOT_T = 0.89 #measured: 0.93 #earlier, 0.88
         MULT_WHEN_R_AND_T = 0.9
         STEERING_MULT_WHEN_RT = 0.767 #measured 0.767
         inst_speed = self.PerSecondToPerCycle(self.speed)
@@ -350,7 +350,7 @@ class Car:
         # Heading error CCW [-pi, pi]
         dtheta_parr = Normalise(target_dir - self.dir)
         
-        turning_dist_forwards = REAL_TURNING_RADIUS * (1 - np.cos(dtheta_parr))
+        turning_dist_forwards = REAL_TURNING_RADIUS * (1 - np.cos(dtheta_parr)) * 0.95
         turning_dist_backwards = TURNING_RADIUS * (1 - np.cos(dtheta_parr)) * 0.78
 
         # Check if car's nose points toward the target line
@@ -376,7 +376,7 @@ class Car:
             if not (inside_turning_area or near_turning_zone):
                 self.movement_state = "DRIVING_TOWARDS"
             else: self.movement_state = "BACKING_UP"
-        elif is_behind and self.movement_state != "TURNING_BACKWARDS" and not (inside_turning_area or near_turning_zone):
+        elif is_behind and self.movement_state != "TURNING_BACKWARDS" and not (inside_turning_area or near_turning_zone or in_target_zone):
             self.movement_state = "DRIVING_TOWARDS"
         elif self.movement_state == "BACKING_UP":
             if dist_to_target > BACKUP_DIST:
@@ -416,7 +416,7 @@ class Car:
                     self.movement_state = "TURNING_FORWARDS"
                 else:
                     self.movement_state = "TURNING_BACKWARDS"
-            elif (inside_turning_area or near_turning_zone) and abs(dtheta_parr) < LOCK_IN_ANGLE:
+            if (inside_turning_area or near_turning_zone) and abs(dtheta_parr) < LOCK_IN_ANGLE:
                 self.movement_state = "TRACKING_LINE"
 
         # --- STATE EXECUTIONS ---
@@ -432,7 +432,7 @@ class Car:
                 target_wheel_dir = Normalise(dtheta_perp - np.pi)
             if inside_turning_area:
                 target_speed = -MAX_SPEED
-                target_wheel_dir = Normalise(dtheta_perp - np.pi)
+                target_wheel_dir = 0#Normalise(dtheta_perp - np.pi)
 
         elif self.movement_state == "TURNING_FORWARDS":
             target_speed = MAX_SPEED
@@ -768,7 +768,7 @@ class Car:
                 self.target_y -= PARK_OFFSET
                 return
             if self.state == "PREPARING_TO_PARK":
-                self.target_x = target_park.center[0] - REAL_TURNING_RADIUS
+                self.target_x = target_park.center[0] - REAL_TURNING_RADIUS + 10
                 self.target_y = arena.start_pos[1]
                 return
         else:
